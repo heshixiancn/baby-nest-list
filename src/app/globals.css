@@ -1,0 +1,141 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --background: #fffaf3;
+  --foreground: #1f2937;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(220, 252, 231, 0.7), transparent 28rem),
+    linear-gradient(180deg, #fffaf3 0%, #ffffff 46%, #f8fafc 100%);
+  color: var(--foreground);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+@keyframes happy-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes happy-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes happy-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes happy-chart-grow {
+  from {
+    opacity: 0.6;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 lg:px-8;
+  }
+
+  .panel {
+    @apply rounded-lg border border-slate-200 bg-white/90 shadow-soft;
+  }
+
+  .field {
+    @apply h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100;
+  }
+
+  .btn {
+    @apply inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 transition duration-150 ease-out hover:border-amber-300 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60;
+    transform: translateZ(0);
+  }
+
+  .btn:not(:disabled):active,
+  button.badge:not(:disabled):active,
+  .tap-feedback:not(:disabled):active {
+    transform: scale(0.98);
+  }
+
+  .btn-primary {
+    @apply border-amber-500 bg-amber-500 text-white hover:border-amber-600 hover:bg-amber-600;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium transition duration-150 ease-out;
+  }
+
+  .tap-feedback {
+    @apply transition duration-150 ease-out;
+    transform: translateZ(0);
+  }
+
+  .soft-backdrop {
+    animation: happy-fade-in 160ms ease-out both;
+  }
+
+  .soft-dialog {
+    animation: happy-dialog-in 180ms ease-out both;
+  }
+
+  .soft-menu {
+    animation: happy-menu-in 140ms ease-out both;
+    transform-origin: top center;
+  }
+
+  .chart-bar {
+    animation: happy-chart-grow 420ms ease-out both;
+    transform-origin: left center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .soft-backdrop,
+  .soft-dialog,
+  .soft-menu,
+  .chart-bar {
+    animation: none;
+  }
+
+  .btn,
+  .badge,
+  .tap-feedback {
+    transition: none;
+  }
+}
