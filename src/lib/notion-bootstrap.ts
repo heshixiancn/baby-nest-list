@@ -39,28 +39,54 @@ const purchaseRecordsDatabaseSchema = {
   备注: { rich_text: {} }
 } satisfies DatabaseCreateProperties;
 
-export async function setupNotionDatabases(input: { token: string; parentPage: string }) {
+export async function setupNotionDatabases(input: {
+  token: string;
+  parentPage: string;
+  shoppingDatabaseId?: string;
+  purchaseRecordsDatabaseId?: string;
+}) {
   const token = input.token.trim();
   const parentPageId = normalizeNotionId(input.parentPage);
+  const inputShoppingDatabaseId = normalizeNotionId(input.shoppingDatabaseId ?? "");
+  const inputPurchaseRecordsDatabaseId = normalizeNotionId(input.purchaseRecordsDatabaseId ?? "");
   if (!token) throw new Error("请填写 Notion Integration Token。");
   if (!parentPageId) throw new Error("请填写已授权给 Integration 的 Notion 父页面链接或 ID。");
 
   const currentConfig = getNotionRuntimeConfig();
-  if (hasCompleteNotionDatabaseConfig(currentConfig)) {
+  const reusableConfig = {
+    ...currentConfig,
+    token,
+    parentPageId,
+    shoppingDatabaseId: inputShoppingDatabaseId || currentConfig.shoppingDatabaseId,
+    purchaseRecordsDatabaseId: inputPurchaseRecordsDatabaseId || currentConfig.purchaseRecordsDatabaseId
+  };
+  if (hasCompleteNotionDatabaseConfig(reusableConfig)) {
+    const notion = new Client({ auth: token });
+    await Promise.all([
+      notion.pages.retrieve({ page_id: parentPageId }),
+      notion.databases.retrieve({ database_id: reusableConfig.shoppingDatabaseId }),
+      notion.databases.retrieve({ database_id: reusableConfig.purchaseRecordsDatabaseId })
+    ]);
+    upsertNotionRuntimeConfig(reusableConfig);
+
     return {
       alreadyConfigured: true,
-      config: currentConfig
+      config: reusableConfig
     };
   }
 
   const notion = new Client({ auth: token });
   await notion.pages.retrieve({ page_id: parentPageId });
+  await retrieveExistingDatabases(notion, [
+    reusableConfig.shoppingDatabaseId,
+    reusableConfig.purchaseRecordsDatabaseId
+  ]);
 
   const shoppingDatabaseId =
-    currentConfig.shoppingDatabaseId ||
+    reusableConfig.shoppingDatabaseId ||
     (await createDatabase(notion, parentPageId, "开心の清单 - 宝宝用品采购清单", "🧺", shoppingDatabaseSchema));
   const purchaseRecordsDatabaseId =
-    currentConfig.purchaseRecordsDatabaseId ||
+    reusableConfig.purchaseRecordsDatabaseId ||
     (await createDatabase(notion, parentPageId, "开心の清单 - 采购记录", "🧾", purchaseRecordsDatabaseSchema));
 
   const nextConfig = {
@@ -92,6 +118,19 @@ async function createDatabase(
   });
 
   return database.id;
+}
+
+async function retrieveExistingDatabases(notion: Client, databaseIds: string[]) {
+  const existingIds = databaseIds.filter(Boolean);
+  if (existingIds.length === 0) return;
+
+  await Promise.all(
+    existingIds.map((databaseId) =>
+      notion.databases.retrieve({
+        database_id: databaseId
+      })
+    )
+  );
 }
 
 function selectProperty(options: string[]) {
