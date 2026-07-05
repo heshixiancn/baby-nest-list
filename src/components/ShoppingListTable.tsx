@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { cn, formatCurrency } from "@/lib/utils";
 import {
@@ -29,11 +29,25 @@ interface NewItemFormState {
   note: string;
 }
 
+interface EditItemFormState extends NewItemFormState {
+  status: string;
+}
+
 interface StatusMenuPosition {
   top: number;
   left: number;
   width: number;
 }
+
+interface ItemGestureState {
+  itemId: string;
+  startX: number;
+  startY: number;
+  longPressTimer: number | null;
+  moved: boolean;
+}
+
+type HapticFeedback = "light" | "medium" | "success" | "warning" | "error";
 
 const statusTone: Record<string, string> = {
   待购买: "bg-amber-100 text-amber-800",
@@ -73,7 +87,39 @@ const emptyForm: NewItemFormState = {
   note: ""
 };
 
+const emptyEditForm: EditItemFormState = {
+  ...emptyForm,
+  status: "待购买"
+};
+
 const hiddenGroupsStorageKey = "happy-list-hidden-shopping-groups";
+const longPressDelayMs = 520;
+const hapticPatterns: Record<HapticFeedback, number | number[]> = {
+  light: 8,
+  medium: 16,
+  success: [12, 24, 12],
+  warning: [18, 36, 18],
+  error: [28, 40, 28]
+};
+
+function triggerHapticFeedback(type: HapticFeedback = "light") {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+
+  try {
+    navigator.vibrate(hapticPatterns[type]);
+  } catch {
+    // Browsers without vibration support should quietly ignore haptic feedback.
+  }
+}
+
+function blurActiveElement() {
+  if (typeof document === "undefined") return;
+
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLElement) {
+    activeElement.blur();
+  }
+}
 
 export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProps) {
   const router = useRouter();
@@ -84,9 +130,15 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
   const [activeGroup, setActiveGroup] = useState(initialGroup);
   const [localItems, setLocalItems] = useState(items);
   const [form, setForm] = useState<NewItemFormState>({ ...emptyForm, group: initialGroup });
+  const [editForm, setEditForm] = useState<EditItemFormState>({ ...emptyEditForm, group: initialGroup });
+  const [editingItem, setEditingItem] = useState<ShoppingItem | null>(null);
+  const [deleteTargetItem, setDeleteTargetItem] = useState<ShoppingItem | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [quantityPendingId, setQuantityPendingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [savingGroupOrder, setSavingGroupOrder] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
@@ -97,6 +149,9 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
   const [hiddenGroups, setHiddenGroups] = useState<string[]>([]);
   const [openStatusMenuId, setOpenStatusMenuId] = useState<string | null>(null);
   const [statusMenuPosition, setStatusMenuPosition] = useState<StatusMenuPosition | null>(null);
+  const [openActionsItemId, setOpenActionsItemId] = useState<string | null>(null);
+  const [printDate, setPrintDate] = useState("");
+  const gestureRef = useRef<ItemGestureState | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const visibleGroups = useMemo(() => {
@@ -118,6 +173,8 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
   const filteredItems = useMemo(() => {
     return localItems.filter((item) => item.group === activeGroup);
   }, [activeGroup, localItems]);
+
+  const printItems = useMemo(() => filteredItems.filter((item) => item.status !== "已放弃"), [filteredItems]);
 
   const statisticsItems = useMemo(() => {
     return localItems.filter((item) => visibleGroups.includes(item.group));
@@ -204,8 +261,22 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
     };
   }, [openStatusMenuId]);
 
+  useEffect(() => {
+    setPrintDate(formatPrintDate(new Date()));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (gestureRef.current?.longPressTimer) {
+        window.clearTimeout(gestureRef.current.longPressTimer);
+      }
+    };
+  }, []);
+
   function handleTabChange(nextGroup: string) {
+    triggerHapticFeedback("light");
     setActiveGroup(nextGroup);
+    setOpenActionsItemId(null);
     closeStatusMenu();
     if (groups.includes(nextGroup)) {
       setForm((current) => ({ ...current, group: nextGroup }));
@@ -213,6 +284,7 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
   }
 
   function openCreateDialog() {
+    triggerHapticFeedback("light");
     setError("");
     setForm((current) => ({
       ...current,
@@ -222,10 +294,118 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
   }
 
   function closeCreateDialog() {
-    if (!creating) setShowCreateDialog(false);
+    if (!creating) {
+      triggerHapticFeedback("light");
+      blurActiveElement();
+      setShowCreateDialog(false);
+    }
+  }
+
+  function openEditDialog(item: ShoppingItem) {
+    triggerHapticFeedback("medium");
+    setError("");
+    setEditingItem(item);
+    setEditForm(formFromItem(item));
+    setOpenActionsItemId(null);
+    closeStatusMenu();
+  }
+
+  function closeEditDialog() {
+    if (!savingEdit) {
+      triggerHapticFeedback("light");
+      blurActiveElement();
+      setEditingItem(null);
+    }
+  }
+
+  function requestDeleteItem(item: ShoppingItem) {
+    triggerHapticFeedback("warning");
+    setDeleteTargetItem(item);
+    setOpenActionsItemId(null);
+    closeStatusMenu();
+  }
+
+  function cancelDeleteItem() {
+    if (!deletingId) {
+      triggerHapticFeedback("light");
+      setDeleteTargetItem(null);
+    }
+  }
+
+  function upsertLocalItem(item: ShoppingItem) {
+    setLocalItems((current) => {
+      const existingIndex = current.findIndex((currentItem) => currentItem.id === item.id);
+      if (existingIndex < 0) return [item, ...current];
+
+      const nextItems = [...current];
+      nextItems[existingIndex] = item;
+      return nextItems;
+    });
+  }
+
+  function removeLocalItem(itemId: string) {
+    setLocalItems((current) => current.filter((item) => item.id !== itemId));
+  }
+
+  function handleCardPointerDown(item: ShoppingItem, event: React.PointerEvent<HTMLElement>) {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if ((event.target as HTMLElement).closest("button,a,input,select,textarea")) return;
+
+    if (gestureRef.current?.longPressTimer) {
+      window.clearTimeout(gestureRef.current.longPressTimer);
+    }
+
+    const timer = window.setTimeout(() => {
+      const gesture = gestureRef.current;
+      if (!gesture || gesture.itemId !== item.id || gesture.moved) return;
+      openEditDialog(item);
+      gestureRef.current = null;
+    }, longPressDelayMs);
+
+    gestureRef.current = {
+      itemId: item.id,
+      startX: event.clientX,
+      startY: event.clientY,
+      longPressTimer: timer,
+      moved: false
+    };
+  }
+
+  function handleCardPointerMove(event: React.PointerEvent<HTMLElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture) return;
+
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+      gesture.moved = true;
+      if (gesture.longPressTimer) {
+        window.clearTimeout(gesture.longPressTimer);
+        gesture.longPressTimer = null;
+      }
+    }
+  }
+
+  function handleCardPointerEnd(event: React.PointerEvent<HTMLElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture) return;
+
+    if (gesture.longPressTimer) {
+      window.clearTimeout(gesture.longPressTimer);
+    }
+
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (Math.abs(deltaX) > 44 && Math.abs(deltaY) < 40) {
+      triggerHapticFeedback("light");
+      setOpenActionsItemId(deltaX < 0 ? gesture.itemId : null);
+    }
+
+    gestureRef.current = null;
   }
 
   function toggleGroupVisibility(groupName: string) {
+    triggerHapticFeedback("light");
     setHiddenGroups((current) => {
       if (current.includes(groupName)) {
         return current.filter((item) => item !== groupName);
@@ -238,7 +418,16 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
   }
 
   function showAllGroups() {
+    triggerHapticFeedback("light");
     setHiddenGroups([]);
+  }
+
+  function handlePrintCurrentGroup() {
+    triggerHapticFeedback("light");
+    closeStatusMenu();
+    setOpenActionsItemId(null);
+    setPrintDate(formatPrintDate(new Date()));
+    window.setTimeout(() => window.print(), 80);
   }
 
   async function handleCreateGroup(event: React.FormEvent<HTMLFormElement>) {
@@ -248,6 +437,7 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
     if (!nextGroupName) return;
 
     if (groups.includes(nextGroupName)) {
+      triggerHapticFeedback("success");
       setHiddenGroups((current) => current.filter((groupName) => groupName !== nextGroupName));
       setActiveGroup(nextGroupName);
       setForm((current) => ({ ...current, group: nextGroupName }));
@@ -272,6 +462,7 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
 
       const createdGroup = payload.group || nextGroupName;
       const nextGroups = payload.groups?.length ? payload.groups : [...groups, createdGroup];
+      triggerHapticFeedback("success");
       setLocalGroups(Array.from(new Set(nextGroups)));
       setHiddenGroups((current) => current.filter((groupName) => groupName !== createdGroup));
       setActiveGroup(createdGroup);
@@ -279,6 +470,7 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
       setNewGroupName("");
       startTransition(() => router.refresh());
     } catch (createGroupError) {
+      triggerHapticFeedback("error");
       setError(createGroupError instanceof Error ? createGroupError.message : "新增分组失败。");
     } finally {
       setCreatingGroup(false);
@@ -289,6 +481,7 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
     const nextGroups = moveGroup(groups, groupName, direction);
     if (nextGroups === groups) return;
 
+    triggerHapticFeedback("light");
     setError("");
     setLocalGroups(nextGroups);
     setSavingGroupOrder(true);
@@ -306,10 +499,12 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
       }
 
       if (payload.groups?.length) {
+        triggerHapticFeedback("success");
         setLocalGroups(payload.groups);
       }
       startTransition(() => router.refresh());
     } catch (moveError) {
+      triggerHapticFeedback("error");
       setError(moveError instanceof Error ? moveError.message : "保存分组顺序失败。");
       setLocalGroups(groups);
     } finally {
@@ -328,6 +523,7 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
       return;
     }
 
+    triggerHapticFeedback("light");
     const rect = buttonElement.getBoundingClientRect();
     const viewportPadding = 12;
     const menuWidth = Math.min(Math.max(160, rect.width), window.innerWidth - viewportPadding * 2);
@@ -357,8 +553,10 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
   }
 
   async function handleStatusChange(itemId: string, nextStatus: string) {
+    triggerHapticFeedback("light");
     setError("");
     setPendingId(itemId);
+    setOpenActionsItemId(null);
     const previousItems = localItems;
     setLocalItems((current) =>
       current.map((item) => (item.id === itemId ? { ...item, status: nextStatus } : item))
@@ -376,12 +574,130 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
         throw new Error(payload.error || "状态更新失败。");
       }
 
+      triggerHapticFeedback("success");
       startTransition(() => router.refresh());
     } catch (updateError) {
+      triggerHapticFeedback("error");
       setLocalItems(previousItems);
       setError(updateError instanceof Error ? updateError.message : "状态更新失败。");
     } finally {
       setPendingId(null);
+    }
+  }
+
+  async function handleQuantityChange(item: ShoppingItem, nextQuantity: number) {
+    const normalizedQuantity = Math.max(1, Math.round(nextQuantity));
+    if (item.quantity === normalizedQuantity || quantityPendingId === item.id) return;
+
+    triggerHapticFeedback("light");
+    setError("");
+    setQuantityPendingId(item.id);
+    setOpenActionsItemId(null);
+    const previousItems = localItems;
+    setLocalItems((current) =>
+      current.map((currentItem) =>
+        currentItem.id === item.id ? { ...currentItem, quantity: normalizedQuantity } : currentItem
+      )
+    );
+
+    try {
+      const response = await fetch(`/api/shopping-list/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ quantity: normalizedQuantity })
+      });
+      const payload = (await response.json()) as { error?: string; item?: ShoppingItem };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "数量更新失败。");
+      }
+
+      if (payload.item) {
+        upsertLocalItem(payload.item);
+      }
+      startTransition(() => router.refresh());
+    } catch (quantityError) {
+      triggerHapticFeedback("error");
+      setLocalItems(previousItems);
+      setError(quantityError instanceof Error ? quantityError.message : "数量更新失败。");
+    } finally {
+      setQuantityPendingId(null);
+    }
+  }
+
+  async function handleEditItem(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingItem) return;
+
+    setError("");
+    setSavingEdit(true);
+
+    try {
+      const response = await fetch(`/api/shopping-list/${editingItem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editForm.name,
+          group: editForm.group,
+          brandModel: editForm.brandModel,
+          unitPrice: editForm.unitPrice.trim() ? Number(editForm.unitPrice) : 0,
+          quantity: editForm.quantity.trim() ? Number(editForm.quantity) : 1,
+          unit: editForm.unit,
+          platform: editForm.platform,
+          paymentMethod: editForm.paymentMethod,
+          productUrl: editForm.productUrl,
+          status: editForm.status,
+          note: editForm.note
+        })
+      });
+      const payload = (await response.json()) as { error?: string; item?: ShoppingItem };
+
+      if (!response.ok || !payload.item) {
+        throw new Error(payload.error || "保存物品失败。");
+      }
+
+      upsertLocalItem(payload.item);
+      setActiveGroup(payload.item.group);
+      blurActiveElement();
+      setEditingItem(null);
+      triggerHapticFeedback("success");
+      startTransition(() => router.refresh());
+    } catch (editError) {
+      triggerHapticFeedback("error");
+      setError(editError instanceof Error ? editError.message : "保存物品失败。");
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
+  async function handleDeleteItem() {
+    if (!deleteTargetItem) return;
+
+    triggerHapticFeedback("warning");
+    setError("");
+    setDeletingId(deleteTargetItem.id);
+    const previousItems = localItems;
+    removeLocalItem(deleteTargetItem.id);
+
+    try {
+      const response = await fetch(`/api/shopping-list/${deleteTargetItem.id}`, {
+        method: "DELETE"
+      });
+      const payload = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error || "删除物品失败。");
+      }
+
+      setDeleteTargetItem(null);
+      triggerHapticFeedback("success");
+      startTransition(() => router.refresh());
+    } catch (deleteError) {
+      triggerHapticFeedback("error");
+      setLocalItems(previousItems);
+      setError(deleteError instanceof Error ? deleteError.message : "删除物品失败。");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -394,7 +710,7 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
       <div className="w-full">
         <button
           className={cn(
-            "badge min-h-10 w-full justify-center border border-transparent hover:ring-2 hover:ring-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-9",
+            "badge min-h-10 w-full justify-center border border-transparent px-3 hover:ring-2 hover:ring-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-100 disabled:cursor-not-allowed disabled:opacity-60",
             statusTone[item.status] ?? "bg-slate-100 text-slate-700"
           )}
           type="button"
@@ -404,6 +720,43 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
           onClick={(event) => toggleStatusMenu(item.id, event.currentTarget)}
         >
           {isUpdating ? "更新中..." : item.status || "-"}
+        </button>
+      </div>
+    );
+  }
+
+  function renderQuantityControl(item: ShoppingItem) {
+    const isUpdating = quantityPendingId === item.id;
+    const canDecrease = item.quantity > 1 && !isUpdating;
+
+    return (
+      <div className="inline-flex h-10 w-full max-w-36 items-center rounded-full border border-slate-200 bg-white text-sm shadow-sm">
+        <button
+          className="tap-feedback flex h-10 w-10 shrink-0 items-center justify-center rounded-l-full text-lg leading-none text-slate-500 disabled:text-slate-300"
+          type="button"
+          disabled={!canDecrease}
+          aria-label={`${item.name || "物品"}数量减一`}
+          onClick={() => void handleQuantityChange(item, item.quantity - 1)}
+        >
+          -
+        </button>
+        <span
+          className={cn(
+            "min-w-0 flex-1 px-1 text-center font-semibold text-slate-900 transition",
+            isUpdating ? "scale-95 text-amber-700" : ""
+          )}
+        >
+          {item.quantity}
+          {item.unit?.trim() ? item.unit.trim() : ""}
+        </span>
+        <button
+          className="tap-feedback flex h-10 w-10 shrink-0 items-center justify-center rounded-r-full text-lg leading-none text-slate-500 disabled:text-slate-300"
+          type="button"
+          disabled={isUpdating}
+          aria-label={`${item.name || "物品"}数量加一`}
+          onClick={() => void handleQuantityChange(item, item.quantity + 1)}
+        >
+          +
         </button>
       </div>
     );
@@ -419,7 +772,10 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
           className="fixed inset-0 z-40 cursor-default bg-transparent"
           type="button"
           aria-label="关闭状态选择"
-          onClick={closeStatusMenu}
+          onClick={() => {
+            triggerHapticFeedback("light");
+            closeStatusMenu();
+          }}
         />
         <div
           className="soft-menu fixed z-50 grid gap-1 rounded-md border border-slate-200 bg-white p-2 shadow-lg"
@@ -491,11 +847,18 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
         throw new Error(payload.error || "新增采购物品失败。");
       }
 
+      const payload = (await response.json()) as { item?: ShoppingItem };
+      if (payload.item) {
+        upsertLocalItem(payload.item);
+      }
       setActiveGroup(form.group);
       setForm({ ...emptyForm, group: form.group });
+      blurActiveElement();
       setShowCreateDialog(false);
+      triggerHapticFeedback("success");
       startTransition(() => router.refresh());
     } catch (createError) {
+      triggerHapticFeedback("error");
       setError(createError instanceof Error ? createError.message : "新增采购物品失败。");
     } finally {
       setCreating(false);
@@ -506,35 +869,92 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
     <div className="space-y-4">
       {renderStatusMenu()}
 
+      <section className="print-export-sheet" aria-hidden="true">
+        <div className="print-export-header">
+          <div>
+            <p className="print-export-kicker">开心の清单</p>
+            <h1>{activeGroup}采购清单</h1>
+          </div>
+          <div className="print-export-meta">
+            <p>共 {printItems.length} 项</p>
+            {printDate ? <p>{printDate}</p> : null}
+          </div>
+        </div>
+
+        {printItems.length === 0 ? (
+          <div className="print-export-empty">当前分组暂无可打印物品。</div>
+        ) : (
+          <table className="print-export-table">
+            <thead>
+              <tr>
+                <th>物品名称</th>
+                <th>数量</th>
+                <th>用途</th>
+              </tr>
+            </thead>
+            <tbody>
+              {printItems.map((item) => (
+                <tr key={item.id}>
+                  <td>{item.name || "未命名"}</td>
+                  <td>{formatQuantity(item)}</td>
+                  <td>{formatPurpose(item)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
       {error ? (
         <div className="rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
       ) : null}
 
       <div className="panel overflow-hidden">
-        <div className="border-b border-slate-100 p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-            <button className="btn w-full sm:w-auto" type="button" onClick={() => setShowStatsDialog(true)}>
+        <div className="border-b border-slate-100 p-3 sm:p-4">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
+            <button
+              className="btn h-10 w-full px-2 sm:h-9 sm:w-auto sm:px-3"
+              type="button"
+              onClick={() => {
+                triggerHapticFeedback("light");
+                setShowStatsDialog(true);
+              }}
+            >
               支出统计
             </button>
-            <button className="btn btn-primary w-full sm:w-auto" type="button" onClick={openCreateDialog}>
+            <button
+              className="btn h-10 w-full px-2 sm:h-9 sm:w-auto sm:px-3"
+              type="button"
+              onClick={handlePrintCurrentGroup}
+            >
+              导出打印
+            </button>
+            <button className="btn btn-primary h-10 w-full px-2 sm:h-9 sm:w-auto sm:px-3" type="button" onClick={openCreateDialog}>
               新增物品
             </button>
-            <button className="btn w-full sm:w-auto" type="button" onClick={() => setShowGroupDialog(true)}>
+            <button
+              className="btn h-10 w-full px-2 sm:h-9 sm:w-auto sm:px-3"
+              type="button"
+              onClick={() => {
+                triggerHapticFeedback("light");
+                setShowGroupDialog(true);
+              }}
+            >
               显示分组
             </button>
           </div>
         </div>
-        <div className="border-b border-slate-100 px-4">
-          <div className="flex gap-5 overflow-x-auto" role="tablist" aria-label="采购清单分组">
+        <div className="border-b border-slate-100 px-3 py-3 sm:px-4 sm:py-0">
+          <div className="flex gap-2 overflow-x-auto pb-1 sm:gap-5 sm:pb-0" role="tablist" aria-label="采购清单分组">
             {groupCounts.map((item) => (
               <button
                 key={item.group}
                 type="button"
                 className={cn(
-                  "tap-feedback flex min-w-fit items-center gap-2 border-b-2 px-1 py-3 text-sm",
+                  "tap-feedback flex min-w-fit items-center gap-2 rounded-full border px-3 py-2 text-sm sm:rounded-none sm:border-x-0 sm:border-t-0 sm:border-b-2 sm:px-1 sm:py-3",
                   activeGroup === item.group
-                    ? "border-amber-500 font-semibold text-amber-800"
-                    : "border-transparent font-medium text-slate-500 hover:border-amber-200 hover:text-amber-700"
+                    ? "border-amber-300 bg-amber-50 font-semibold text-amber-800 sm:border-amber-500 sm:bg-transparent"
+                    : "border-slate-200 bg-white font-medium text-slate-500 hover:border-amber-200 hover:text-amber-700 sm:border-transparent sm:bg-transparent"
                 )}
                 onClick={() => handleTabChange(item.group)}
                 role="tab"
@@ -563,45 +983,77 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
           <div className="p-10 text-center text-sm text-slate-500">当前分组暂无符合条件的采购物品。</div>
         ) : (
           <>
-            <div className="space-y-3 p-4 md:hidden">
+            <div className="space-y-2 p-3 md:hidden">
               {filteredItems.map((item) => (
-                <article key={item.id} className="rounded-lg border border-slate-200 bg-white p-4 transition-colors duration-150 active:bg-slate-50">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h3 className="font-semibold text-slate-900">{item.name || "未命名"}</h3>
-                      {item.productUrl ? (
-                        <button
-                          type="button"
-                          className="mt-1 block max-w-full truncate text-left text-sm font-medium text-amber-700 underline-offset-2 active:text-amber-800"
-                          onClick={() => setLinkDialogItem(item)}
-                        >
-                          {item.brandModel || "查看商品链接"}
-                        </button>
-                      ) : (
-                        <p className="mt-1 text-sm text-slate-500">{item.brandModel || "未填写品牌型号"}</p>
-                      )}
-                    </div>
+                <div key={item.id} className="relative overflow-hidden rounded-xl">
+                  <div className="absolute inset-y-0 right-0 flex w-[112px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                    <button
+                      className="tap-feedback flex flex-1 items-center justify-center bg-amber-50 text-sm font-semibold text-amber-800 active:bg-amber-100"
+                      type="button"
+                      onClick={() => openEditDialog(item)}
+                    >
+                      修改
+                    </button>
+                    <button
+                      className="tap-feedback flex flex-1 items-center justify-center bg-rose-50 text-sm font-semibold text-rose-700 active:bg-rose-100 disabled:opacity-50"
+                      type="button"
+                      disabled={deletingId === item.id}
+                      onClick={() => requestDeleteItem(item)}
+                    >
+                      删除
+                    </button>
                   </div>
-                  <dl className="mt-4 grid gap-3 text-sm">
-                    <div>
-                      <dt className="text-xs text-slate-500">数量</dt>
-                      <dd className="mt-1 font-medium text-slate-800">{formatQuantity(item)}</dd>
+                  <article
+                    className={cn(
+                      "relative rounded-xl border border-slate-200 bg-white p-3 shadow-[0_1px_10px_rgba(15,23,42,0.03)] transition duration-200 ease-out active:scale-[0.99] active:bg-slate-50",
+                      openActionsItemId === item.id ? "-translate-x-[112px] border-amber-200" : "translate-x-0"
+                    )}
+                    style={{ touchAction: "pan-y" }}
+                    onPointerDown={(event) => handleCardPointerDown(item, event)}
+                    onPointerMove={handleCardPointerMove}
+                    onPointerUp={handleCardPointerEnd}
+                    onPointerCancel={handleCardPointerEnd}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate font-semibold text-slate-900">{item.name || "未命名"}</h3>
+                        {item.productUrl ? (
+                          <button
+                            type="button"
+                            className="mt-1 block max-w-full truncate text-left text-sm font-medium text-amber-700 underline-offset-2 active:text-amber-800"
+                            onClick={() => {
+                              triggerHapticFeedback("light");
+                              setLinkDialogItem(item);
+                            }}
+                          >
+                            {item.brandModel || "查看商品链接"}
+                          </button>
+                        ) : (
+                          <p className="mt-1 truncate text-sm text-slate-500">{item.brandModel || "未填写品牌型号"}</p>
+                        )}
+                      </div>
                     </div>
-                  </dl>
-                  <div className="mt-4 grid gap-2">
-                    {renderStatusControl(item)}
-                  </div>
-                </article>
+                    <div className="mt-4 grid grid-cols-[minmax(0,1fr)_minmax(7.25rem,0.8fr)] items-center gap-3">
+                      <div className="min-w-0">
+                        {renderQuantityControl(item)}
+                      </div>
+                      <div className="min-w-0">
+                        {renderStatusControl(item)}
+                      </div>
+                    </div>
+                  </article>
+                </div>
               ))}
             </div>
             <div className="hidden overflow-x-auto p-4 md:block">
-              <table className="min-w-[680px] w-full divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 text-sm">
+              <table className="min-w-[760px] w-full divide-y divide-slate-100 overflow-hidden rounded-lg border border-slate-200 text-sm">
                 <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
                   <tr>
                     <th className="px-4 py-3">物品名称</th>
                     <th className="px-4 py-3">品牌型号</th>
                     <th className="px-4 py-3">数量</th>
                     <th className="px-4 py-3">状态</th>
+                    <th className="px-4 py-3">操作</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -609,10 +1061,25 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
                   <tr key={item.id} className="align-top transition-colors duration-150 hover:bg-slate-50/70">
                     <td className="px-4 py-3 font-medium text-slate-900">{item.name || "未命名"}</td>
                     <td className="px-4 py-3 text-slate-600">{item.brandModel || "-"}</td>
-                    <td className="px-4 py-3 text-slate-600">{formatQuantity(item)}</td>
+                    <td className="px-4 py-3 text-slate-600">{renderQuantityControl(item)}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-col gap-2">
                         {renderStatusControl(item)}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button className="btn h-8 px-2 text-xs" type="button" onClick={() => openEditDialog(item)}>
+                          修改
+                        </button>
+                        <button
+                          className="btn h-8 px-2 text-xs text-rose-700 hover:border-rose-200 hover:bg-rose-50"
+                          type="button"
+                          disabled={deletingId === item.id}
+                          onClick={() => requestDeleteItem(item)}
+                        >
+                          删除
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -640,7 +1107,195 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
               >
                 打开商品页
               </a>
-              <button className="btn h-10 w-full" type="button" onClick={() => setLinkDialogItem(null)}>
+              <button
+                className="btn h-10 w-full"
+                type="button"
+                onClick={() => {
+                  triggerHapticFeedback("light");
+                  setLinkDialogItem(null);
+                }}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editingItem ? (
+        <div className="soft-backdrop fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-slate-950/40 px-0 py-0 sm:items-start sm:px-4 sm:py-8">
+          <div className="soft-dialog panel max-h-[calc(100vh-1rem)] w-full max-w-4xl overflow-y-auto rounded-b-none sm:rounded-lg">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+              <div>
+                <h2 className="text-base font-semibold text-slate-900">修改物品</h2>
+                <p className="mt-1 text-sm text-slate-500">{editingItem.name || "未命名"}</p>
+              </div>
+              <button
+                className="btn h-9 px-3"
+                type="button"
+                onClick={closeEditDialog}
+                disabled={savingEdit}
+                aria-label="关闭修改物品弹窗"
+              >
+                关闭
+              </button>
+            </div>
+            <form className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4" onSubmit={handleEditItem}>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600 lg:col-span-2">
+                物品名称
+                <input
+                  className="field"
+                  value={editForm.name}
+                  onChange={(event) => setEditForm((current) => ({ ...current, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600">
+                分组
+                <select
+                  className="field"
+                  value={editForm.group}
+                  onChange={(event) => setEditForm((current) => ({ ...current, group: event.target.value }))}
+                >
+                  {groups.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600">
+                状态
+                <select
+                  className="field"
+                  value={editForm.status}
+                  onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value }))}
+                >
+                  {SHOPPING_STATUSES.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600 lg:col-span-2">
+                品牌型号
+                <input
+                  className="field"
+                  value={editForm.brandModel}
+                  onChange={(event) => setEditForm((current) => ({ ...current, brandModel: event.target.value }))}
+                  placeholder="可选"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600">
+                数量
+                <input
+                  className="field"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={editForm.quantity}
+                  onChange={(event) => setEditForm((current) => ({ ...current, quantity: event.target.value }))}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600">
+                单位
+                <input
+                  className="field"
+                  value={editForm.unit}
+                  onChange={(event) => setEditForm((current) => ({ ...current, unit: event.target.value }))}
+                  maxLength={10}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600">
+                单价
+                <input
+                  className="field"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editForm.unitPrice}
+                  onChange={(event) => setEditForm((current) => ({ ...current, unitPrice: event.target.value }))}
+                  placeholder="0"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600">
+                购买平台
+                <select
+                  className="field"
+                  value={editForm.platform}
+                  onChange={(event) => setEditForm((current) => ({ ...current, platform: event.target.value }))}
+                >
+                  <option value="">未指定</option>
+                  {PURCHASE_PLATFORMS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600">
+                支付方式
+                <select
+                  className="field"
+                  value={editForm.paymentMethod}
+                  onChange={(event) => setEditForm((current) => ({ ...current, paymentMethod: event.target.value }))}
+                >
+                  {PAYMENT_METHODS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600 sm:col-span-2">
+                商品链接
+                <input
+                  className="field"
+                  value={editForm.productUrl}
+                  onChange={(event) => setEditForm((current) => ({ ...current, productUrl: event.target.value }))}
+                  placeholder="https://"
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm font-medium text-slate-600 sm:col-span-2 lg:col-span-4">
+                用途
+                <input
+                  className="field"
+                  value={editForm.note}
+                  onChange={(event) => setEditForm((current) => ({ ...current, note: event.target.value }))}
+                  placeholder="例如：住院待产、喂养、清洁护理"
+                />
+              </label>
+              <div className="grid gap-2 sm:col-span-2 sm:flex sm:flex-wrap lg:col-span-4">
+                <button className="btn btn-primary h-10 w-full sm:w-auto" type="submit" disabled={savingEdit || isPending}>
+                  {savingEdit ? "正在保存..." : "保存修改"}
+                </button>
+                <button className="btn h-10 w-full sm:w-auto" type="button" onClick={closeEditDialog} disabled={savingEdit}>
+                  取消
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteTargetItem ? (
+        <div className="soft-backdrop fixed inset-0 z-50 flex items-end justify-center bg-slate-950/40 px-0 py-0 sm:items-center sm:px-4">
+          <div className="soft-dialog panel w-full max-w-sm rounded-b-none sm:rounded-lg">
+            <div className="border-b border-slate-100 px-5 py-4">
+              <h2 className="text-base font-semibold text-slate-900">删除物品</h2>
+              <p className="mt-1 text-sm text-slate-500">{deleteTargetItem.name || "未命名"}</p>
+            </div>
+            <div className="grid gap-2 p-5">
+              <button
+                className="btn h-10 w-full border-rose-200 bg-rose-50 text-rose-700 hover:border-rose-300 hover:bg-rose-100"
+                type="button"
+                disabled={deletingId === deleteTargetItem.id}
+                onClick={() => void handleDeleteItem()}
+              >
+                {deletingId === deleteTargetItem.id ? "正在删除..." : "确认删除"}
+              </button>
+              <button className="btn h-10 w-full" type="button" onClick={cancelDeleteItem} disabled={Boolean(deletingId)}>
                 取消
               </button>
             </div>
@@ -659,7 +1314,10 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
               <button
                 className="btn h-9 px-3"
                 type="button"
-                onClick={() => setShowStatsDialog(false)}
+                onClick={() => {
+                  triggerHapticFeedback("light");
+                  setShowStatsDialog(false);
+                }}
                 aria-label="关闭支出统计弹窗"
               >
                 关闭
@@ -1043,12 +1701,12 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm font-medium text-slate-600 sm:col-span-2 lg:col-span-4">
-                备注
+                用途
                 <input
                   className="field"
                   value={form.note}
                   onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
-                  placeholder="可选"
+                  placeholder="例如：住院待产、喂养、清洁护理"
                 />
               </label>
               <div className="grid gap-2 sm:col-span-2 sm:flex sm:flex-wrap lg:col-span-4">
@@ -1075,7 +1733,10 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
               <button
                 className="btn h-9 px-3"
                 type="button"
-                onClick={() => setShowGroupDialog(false)}
+                onClick={() => {
+                  triggerHapticFeedback("light");
+                  setShowGroupDialog(false);
+                }}
                 aria-label="关闭显示分组弹窗"
               >
                 关闭
@@ -1155,7 +1816,10 @@ export function ShoppingListTable({ items, groupOptions }: ShoppingListTableProp
                 <button
                   className="btn btn-primary h-10 w-full sm:w-auto"
                   type="button"
-                  onClick={() => setShowGroupDialog(false)}
+                  onClick={() => {
+                    triggerHapticFeedback("light");
+                    setShowGroupDialog(false);
+                  }}
                   disabled={creatingGroup || savingGroupOrder}
                 >
                   {savingGroupOrder ? "保存中..." : "完成"}
@@ -1173,9 +1837,37 @@ function getInitialGroup(items: ShoppingItem[], groups: string[]) {
   return items.find((item) => item.group)?.group || groups[0] || ITEM_GROUPS[0];
 }
 
+function formFromItem(item: ShoppingItem): EditItemFormState {
+  return {
+    name: item.name,
+    group: item.group,
+    brandModel: item.brandModel,
+    unitPrice: item.unitPrice ? String(item.unitPrice) : "",
+    quantity: item.quantity ? String(item.quantity) : "1",
+    unit: item.unit || "件",
+    platform: item.platform,
+    paymentMethod: item.paymentMethod || "现金",
+    productUrl: item.productUrl,
+    status: item.status || "待购买",
+    note: item.note
+  };
+}
+
 function formatQuantity(item: Pick<ShoppingItem, "quantity" | "unit">) {
   const unit = item.unit.trim();
   return unit ? `${item.quantity} ${unit}` : String(item.quantity);
+}
+
+function formatPurpose(item: Pick<ShoppingItem, "note">) {
+  return item.note.trim() || "-";
+}
+
+function formatPrintDate(date: Date) {
+  return date.toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
 }
 
 function moveGroup(groups: string[], groupName: string, direction: "up" | "down") {

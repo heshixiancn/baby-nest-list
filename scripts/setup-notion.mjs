@@ -55,7 +55,6 @@ const itemGroups = [
 const shoppingStatuses = ["待购买", "已下单", "已到货", "暂缓", "已放弃"];
 const platforms = ["京东", "淘宝", "天猫", "山姆", "拼多多", "抖音", "线下", "劳保"];
 const paymentMethods = ["现金", "劳保积分", "京东E卡"];
-const inventoryStatuses = ["正常", "需要补货", "已下单", "已停用"];
 const categoryFallbacks = {
   宝宝大件: "宝宝待产包",
   食品营养: "妈妈待产包",
@@ -133,45 +132,6 @@ const seedShoppingItems = [
     note: "出生后按实际情况补"
   }
 ];
-const seedInventoryItems = [
-  {
-    name: "棉柔巾",
-    group: "宝宝生活耗材",
-    currentStock: 6,
-    unit: "包",
-    minimumStock: 4,
-    monthlyUsage: 6,
-    preferredBrandModel: "加厚款",
-    preferredPlatform: "京东",
-    status: "正常",
-    note: ""
-  },
-  {
-    name: "湿巾",
-    group: "宝宝生活耗材",
-    currentStock: 3,
-    unit: "包",
-    minimumStock: 4,
-    monthlyUsage: 5,
-    preferredBrandModel: "婴儿手口可用",
-    preferredPlatform: "天猫",
-    status: "正常",
-    note: "库存低于最低值时前端会显示需要补货"
-  },
-  {
-    name: "纸尿裤 M 码",
-    group: "宝宝生活耗材",
-    currentStock: 2,
-    unit: "包",
-    minimumStock: 3,
-    monthlyUsage: 5,
-    preferredBrandModel: "透气轻薄款",
-    preferredPlatform: "京东",
-    status: "已下单",
-    note: "待新订单到货"
-  }
-];
-
 const shoppingDatabaseSchema = {
   物品名称: { title: {} },
   类别: selectProperty(itemGroups),
@@ -183,20 +143,6 @@ const shoppingDatabaseSchema = {
   支付方式: selectProperty(paymentMethods),
   商品链接: { url: {} },
   状态: selectProperty(shoppingStatuses),
-  备注: { rich_text: {} }
-};
-
-const inventoryDatabaseSchema = {
-  消耗品名称: { title: {} },
-  类别: selectProperty(itemGroups),
-  当前库存: { number: { format: "number" } },
-  单位: { rich_text: {} },
-  最低库存: { number: { format: "number" } },
-  月均消耗: { number: { format: "number" } },
-  常用品牌型号: { rich_text: {} },
-  常用平台: selectProperty(platforms),
-  常用链接: { url: {} },
-  状态: selectProperty(inventoryStatuses),
   备注: { rich_text: {} }
 };
 
@@ -223,9 +169,6 @@ try {
   const existingShoppingDatabaseId = forceNewDatabases
     ? ""
     : normalizeNotionId(process.env.NOTION_SHOPPING_DATABASE_ID || "");
-  const existingInventoryDatabaseId = forceNewDatabases
-    ? ""
-    : normalizeNotionId(process.env.NOTION_INVENTORY_DATABASE_ID || "");
   const existingPurchaseRecordsDatabaseId = forceNewDatabases
     ? ""
     : normalizeNotionId(process.env.NOTION_PURCHASE_RECORDS_DATABASE_ID || "");
@@ -234,16 +177,9 @@ try {
     await normalizeCategoryValues(existingShoppingDatabaseId, "采购清单", "宝宝待产包");
   }
 
-  if (resetCategoryOptions && existingInventoryDatabaseId) {
-    await normalizeCategoryValues(existingInventoryDatabaseId, "库存清单", "宝宝生活耗材");
-  }
-
   const shoppingResult = existingShoppingDatabaseId
     ? await updateExistingDatabase(existingShoppingDatabaseId, shoppingDatabaseSchema, "采购清单")
     : await createShoppingDatabase();
-  const inventoryResult = existingInventoryDatabaseId
-    ? await updateExistingDatabase(existingInventoryDatabaseId, inventoryDatabaseSchema, "库存清单")
-    : await createInventoryDatabase();
   const purchaseRecordsResult = existingPurchaseRecordsDatabaseId
     ? await updateExistingDatabase(existingPurchaseRecordsDatabaseId, purchaseRecordsDatabaseSchema, "采购记录")
     : await createPurchaseRecordsDatabase();
@@ -253,16 +189,10 @@ try {
     await createShoppingSeedPages(shoppingResult.id);
   }
 
-  if (inventoryResult.created || seedExistingDatabases) {
-    console.log("正在写入库存清单默认数据...");
-    await createInventorySeedPages(inventoryResult.id);
-  }
-
   const values = {
     NOTION_TOKEN: notionToken,
     NOTION_PARENT_PAGE_ID: parentPageId,
     NOTION_SHOPPING_DATABASE_ID: shoppingResult.id,
-    NOTION_INVENTORY_DATABASE_ID: inventoryResult.id,
     NOTION_PURCHASE_RECORDS_DATABASE_ID: purchaseRecordsResult.id
   };
 
@@ -271,15 +201,13 @@ try {
   console.log("");
   console.log("Notion 数据库准备完成。已写入 .env.local：");
   console.log(`NOTION_SHOPPING_DATABASE_ID=${shoppingResult.id}`);
-  console.log(`NOTION_INVENTORY_DATABASE_ID=${inventoryResult.id}`);
   console.log(`NOTION_PURCHASE_RECORDS_DATABASE_ID=${purchaseRecordsResult.id}`);
   console.log(`采购清单：${shoppingResult.created ? "新建并初始化默认数据" : "已同步字段结构"}`);
-  console.log(`库存清单：${inventoryResult.created ? "新建并初始化默认数据" : "已同步字段结构"}`);
   console.log(`采购记录：${purchaseRecordsResult.created ? "已新建空表" : "已同步字段结构"}`);
   if (resetCategoryOptions) {
     console.log(`类别选项已按参数 --reset-category-options 重置为：${itemGroups.join("、")}`);
   }
-  if (seedExistingDatabases && (!shoppingResult.created || !inventoryResult.created)) {
+  if (seedExistingDatabases && !shoppingResult.created) {
     console.log("已按 --seed-existing 写入现有数据库默认数据。");
   }
   console.log("");
@@ -355,18 +283,6 @@ async function createShoppingDatabase() {
   return { id: database.id, created: true };
 }
 
-async function createInventoryDatabase() {
-  console.log("未检测到库存清单数据库 ID，正在创建...");
-  const database = await notion.databases.create({
-    parent: { type: "page_id", page_id: parentPageId },
-    title: [{ type: "text", text: { content: "开心の清单 - 消耗品库存管理" } }],
-    icon: { type: "emoji", emoji: "📦" },
-    properties: inventoryDatabaseSchema
-  });
-
-  return { id: database.id, created: true };
-}
-
 async function createPurchaseRecordsDatabase() {
   console.log("未检测到采购记录数据库 ID，正在创建...");
   const database = await notion.databases.create({
@@ -434,29 +350,6 @@ async function createShoppingSeedPages(databaseId) {
           购买平台: selectValue(item.platform),
           支付方式: selectValue(item.paymentMethod),
           商品链接: { url: null },
-          状态: selectValue(item.status),
-          备注: richTextProperty(item.note)
-        }
-      })
-    )
-  );
-}
-
-async function createInventorySeedPages(databaseId) {
-  await Promise.all(
-    seedInventoryItems.map((item) =>
-      notion.pages.create({
-        parent: { database_id: databaseId },
-        properties: {
-          消耗品名称: titleProperty(item.name),
-          类别: selectValue(item.group),
-          当前库存: { number: item.currentStock },
-          单位: richTextProperty(item.unit),
-          最低库存: { number: item.minimumStock },
-          月均消耗: { number: item.monthlyUsage },
-          常用品牌型号: richTextProperty(item.preferredBrandModel),
-          常用平台: selectValue(item.preferredPlatform),
-          常用链接: { url: null },
           状态: selectValue(item.status),
           备注: richTextProperty(item.note)
         }

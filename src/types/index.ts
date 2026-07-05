@@ -19,13 +19,10 @@ export const PURCHASE_PLATFORMS = [
 
 export const PAYMENT_METHODS = ["现金", "劳保积分", "京东E卡"] as const;
 
-export const INVENTORY_STATUSES = ["正常", "需要补货", "已下单", "已停用"] as const;
-
 export type ItemGroup = (typeof ITEM_GROUPS)[number];
 export type ShoppingStatus = (typeof SHOPPING_STATUSES)[number];
 export type PurchasePlatform = (typeof PURCHASE_PLATFORMS)[number];
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
-export type InventoryStatus = (typeof INVENTORY_STATUSES)[number];
 
 export interface ShoppingItem {
   id: string;
@@ -61,33 +58,8 @@ export interface PurchaseRecord {
   updatedAt: string;
 }
 
-export interface InventoryItem {
-  id: string;
-  name: string;
-  group: string;
-  currentStock: number;
-  unit: string;
-  minimumStock: number;
-  monthlyUsage: number;
-  preferredBrandModel: string;
-  preferredPlatform: string;
-  preferredUrl: string;
-  status: InventoryStatus | string;
-  rawStatus: InventoryStatus | string;
-  note: string;
-  updatedAt: string;
-}
-
 export interface NotionFetchResult<T> {
   data: T[];
   error?: string;
   missingConfig?: boolean;
-}
-
-export interface DashboardStats {
-  todoCount: number;
-  orderedCount: number;
-  arrivedCount: number;
-  totalAmount: number;
-  replenishCount: number;
 }

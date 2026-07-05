@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
-import { createShoppingItem, getShoppingGroupOptions } from "@/lib/notion";
+import { archiveShoppingItem, getShoppingGroupOptions, updateShoppingItem } from "@/lib/notion";
 import { PAYMENT_METHODS, PURCHASE_PLATFORMS, SHOPPING_STATUSES } from "@/types";
 
 function isAllowed<T extends readonly string[]>(value: string, list: T): value is T[number] {
   return list.includes(value as T[number]);
 }
 
-export async function POST(request: Request) {
+export async function PATCH(request: Request, context: { params: { id: string } }) {
   try {
+    const { id } = context.params;
     const body = (await request.json()) as {
       name?: string;
       group?: string;
@@ -22,14 +23,15 @@ export async function POST(request: Request) {
       note?: string;
     };
 
-    const name = body.name?.trim() ?? "";
-    if (!name) {
+    if (body.name !== undefined && !body.name.trim()) {
       return NextResponse.json({ error: "物品名称不能为空。" }, { status: 400 });
     }
 
-    const groupOptions = await getShoppingGroupOptions();
-    if (!body.group || !groupOptions.includes(body.group)) {
-      return NextResponse.json({ error: "请选择有效的分组。" }, { status: 400 });
+    if (body.group !== undefined) {
+      const groupOptions = await getShoppingGroupOptions();
+      if (!body.group || !groupOptions.includes(body.group)) {
+        return NextResponse.json({ error: "请选择有效的分组。" }, { status: 400 });
+      }
     }
 
     if (body.platform && !isAllowed(body.platform, PURCHASE_PLATFORMS)) {
@@ -44,37 +46,42 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "请选择有效的采购状态。" }, { status: 400 });
     }
 
-    if (typeof body.unitPrice !== "number" || Number.isNaN(body.unitPrice) || body.unitPrice < 0) {
+    if (body.unitPrice !== undefined && (typeof body.unitPrice !== "number" || Number.isNaN(body.unitPrice) || body.unitPrice < 0)) {
       return NextResponse.json({ error: "单价必须是非负数字。" }, { status: 400 });
     }
 
-    if (typeof body.quantity !== "number" || Number.isNaN(body.quantity) || body.quantity < 1) {
+    if (body.quantity !== undefined && (typeof body.quantity !== "number" || Number.isNaN(body.quantity) || body.quantity < 1)) {
       return NextResponse.json({ error: "数量必须大于等于 1。" }, { status: 400 });
     }
 
-    const unit = body.unit?.trim() || "件";
-    if (unit.length > 10) {
+    const unit = body.unit?.trim();
+    if (unit && unit.length > 10) {
       return NextResponse.json({ error: "单位不能超过 10 个字符。" }, { status: 400 });
     }
 
-    const item = await createShoppingItem({
-      name,
-      group: body.group,
-      brandModel: body.brandModel,
-      unitPrice: body.unitPrice,
-      quantity: body.quantity,
-      unit,
-      platform: body.platform,
-      paymentMethod: body.paymentMethod ?? "现金",
-      productUrl: body.productUrl,
-      status: body.status ?? "待购买",
-      note: body.note
+    const item = await updateShoppingItem(id, {
+      ...body,
+      name: body.name?.trim(),
+      unit: unit || body.unit
     });
 
     return NextResponse.json({ ok: true, item });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "创建采购物品失败。" },
+      { error: error instanceof Error ? error.message : "更新采购物品失败。" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(_request: Request, context: { params: { id: string } }) {
+  try {
+    const { id } = context.params;
+    await archiveShoppingItem(id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "删除采购物品失败。" },
       { status: 500 }
     );
   }

@@ -1,33 +1,37 @@
 import Link from "next/link";
+import { NotionSetupGuide } from "@/components/NotionSetupGuide";
 import { StatCard } from "@/components/StatCard";
-import { getInventoryItems, getItemGroupOptions, getShoppingItems } from "@/lib/notion";
+import { hasExistingNotionDatabaseConfig } from "@/lib/notion-config";
+import { getShoppingGroupOptions, getShoppingItems } from "@/lib/notion";
 import { formatCurrency } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
-  const [shoppingResult, inventoryResult, groupOptions] = await Promise.all([
-    getShoppingItems(),
-    getInventoryItems(),
-    getItemGroupOptions()
-  ]);
+  if (!hasExistingNotionDatabaseConfig()) {
+    return (
+      <main className="page-shell">
+        <NotionSetupGuide />
+      </main>
+    );
+  }
+
+  const [shoppingResult, groupOptions] = await Promise.all([getShoppingItems(), getShoppingGroupOptions()]);
   const shoppingItems = shoppingResult.data;
-  const inventoryItems = inventoryResult.data;
 
   const todoItems = shoppingItems.filter((item) => item.status === "待购买");
   const orderedItems = shoppingItems.filter((item) => item.status === "已下单");
   const arrivedItems = shoppingItems.filter((item) => item.status === "已到货");
-  const replenishItems = inventoryItems.filter((item) => item.status === "需要补货");
   const totalAmount = shoppingItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const errors = [shoppingResult.error, inventoryResult.error].filter(Boolean);
+  const errors = [shoppingResult.error].filter(Boolean);
   const groupSummaries = groupOptions.map((group) => {
     const shoppingInGroup = shoppingItems.filter((item) => item.group === group);
-    const inventoryInGroup = inventoryItems.filter((item) => item.group === group);
     const pending = shoppingInGroup.filter((item) => item.status === "待购买").length;
-    const replenish = inventoryInGroup.filter((item) => item.status === "需要补货").length;
+    const ordered = shoppingInGroup.filter((item) => item.status === "已下单").length;
+    const arrived = shoppingInGroup.filter((item) => item.status === "已到货").length;
     const total = shoppingInGroup.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-    return { group, pending, replenish, total };
-  }).filter((item) => item.pending > 0 || item.replenish > 0 || item.total > 0);
+    return { group, pending, ordered, arrived, total };
+  }).filter((item) => item.pending > 0 || item.ordered > 0 || item.arrived > 0 || item.total > 0);
 
   return (
     <main className="page-shell space-y-6">
@@ -37,7 +41,7 @@ export default async function HomePage() {
           待产包与宝宝 0-1 个月用品管理
         </h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          采购清单、购买状态、消耗品库存和补货提醒集中管理，数据源来自 Notion。
+          采购清单、购买状态和支出记录集中管理，数据源来自 Notion。
         </p>
       </section>
 
@@ -48,19 +52,18 @@ export default async function HomePage() {
         </section>
       ) : null}
 
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard title="待购买数量" value={todoItems.length} tone="amber" />
         <StatCard title="已下单数量" value={orderedItems.length} tone="blue" />
         <StatCard title="已到货数量" value={arrivedItems.length} tone="green" />
         <StatCard title="采购清单总金额" value={formatCurrency(totalAmount)} tone="slate" />
-        <StatCard title="需要补货" value={replenishItems.length} tone="rose" />
       </section>
 
       <section>
         <section className="panel overflow-hidden">
           <div className="border-b border-slate-100 px-4 py-3">
             <h2 className="font-semibold text-slate-900">分组看板</h2>
-            <p className="mt-1 text-sm text-slate-500">按分组汇总待购买数量、需要补货数量和采购金额。</p>
+            <p className="mt-1 text-sm text-slate-500">按分组汇总待购买、已下单、已到货数量和采购金额。</p>
           </div>
           {groupSummaries.length === 0 ? (
             <p className="p-4 text-sm text-slate-500">暂无分组数据。</p>
@@ -76,8 +79,8 @@ export default async function HomePage() {
                         <dd className="mt-1 font-semibold text-slate-900">{item.pending}</dd>
                       </div>
                       <div>
-                        <dt className="text-xs text-slate-500">补货</dt>
-                        <dd className="mt-1 font-semibold text-slate-900">{item.replenish}</dd>
+                        <dt className="text-xs text-slate-500">已下单</dt>
+                        <dd className="mt-1 font-semibold text-slate-900">{item.ordered}</dd>
                       </div>
                       <div>
                         <dt className="text-xs text-slate-500">金额</dt>
@@ -93,7 +96,8 @@ export default async function HomePage() {
                     <tr>
                       <th className="px-4 py-3">分组</th>
                       <th className="px-4 py-3">待购买</th>
-                      <th className="px-4 py-3">需要补货</th>
+                      <th className="px-4 py-3">已下单</th>
+                      <th className="px-4 py-3">已到货</th>
                       <th className="px-4 py-3">采购金额</th>
                     </tr>
                   </thead>
@@ -102,7 +106,8 @@ export default async function HomePage() {
                       <tr key={item.group}>
                         <td className="px-4 py-3 font-medium text-slate-900">{item.group}</td>
                         <td className="px-4 py-3 text-slate-600">{item.pending}</td>
-                        <td className="px-4 py-3 text-slate-600">{item.replenish}</td>
+                        <td className="px-4 py-3 text-slate-600">{item.ordered}</td>
+                        <td className="px-4 py-3 text-slate-600">{item.arrived}</td>
                         <td className="px-4 py-3 text-slate-600">{formatCurrency(item.total)}</td>
                       </tr>
                     ))}
@@ -114,7 +119,7 @@ export default async function HomePage() {
         </section>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
+      <section className="grid gap-4 lg:grid-cols-2">
         <DashboardList
           title="待购买清单"
           emptyText="暂无待购买物品。"
@@ -124,16 +129,6 @@ export default async function HomePage() {
             meta: item.group || "未分组"
           }))}
           href="/shopping-list"
-        />
-        <DashboardList
-          title="需要补货清单"
-          emptyText="暂无需要补货的消耗品。"
-          items={replenishItems.slice(0, 8).map((item) => ({
-            id: item.id,
-            title: item.name || "未命名",
-            meta: `当前 ${item.currentStock}${item.unit} · 最低 ${item.minimumStock}${item.unit}`
-          }))}
-          href="/inventory"
         />
         <DashboardList
           title="最近已下单清单"

@@ -1,9 +1,19 @@
 import { ShoppingListTable } from "@/components/ShoppingListTable";
+import { NotionSetupGuide } from "@/components/NotionSetupGuide";
+import { hasExistingNotionDatabaseConfig } from "@/lib/notion-config";
 import { getShoppingGroupOptions, getShoppingItems } from "@/lib/notion";
 
 export const dynamic = "force-dynamic";
 
 export default async function ShoppingListPage() {
+  if (!hasExistingNotionDatabaseConfig()) {
+    return (
+      <main className="page-shell">
+        <NotionSetupGuide />
+      </main>
+    );
+  }
+
   const [result, groupOptions] = await Promise.all([getShoppingItems(), getShoppingGroupOptions()]);
 
   return (

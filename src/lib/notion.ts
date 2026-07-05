@@ -1,8 +1,7 @@
 import { Client } from "@notionhq/client";
+import { getNotionRuntimeConfig } from "@/lib/notion-config";
 import {
   ITEM_GROUPS,
-  type InventoryItem,
-  type InventoryStatus,
   type NotionFetchResult,
   type PurchaseRecord,
   type ShoppingItem,
@@ -35,13 +34,15 @@ type NotionDatabaseProperty = {
     options?: Array<{ name?: string; color?: SelectColor }>;
   };
 };
+type NotionPageUpdateProperties = NonNullable<Parameters<Client["pages"]["update"]>[0]["properties"]>;
 
-const notionToken = process.env.NOTION_TOKEN;
-const shoppingDatabaseId = process.env.NOTION_SHOPPING_DATABASE_ID;
-const inventoryDatabaseId = process.env.NOTION_INVENTORY_DATABASE_ID;
-const purchaseRecordsDatabaseId = process.env.NOTION_PURCHASE_RECORDS_DATABASE_ID;
-
-const notion = notionToken ? new Client({ auth: notionToken }) : null;
+function getNotionContext() {
+  const config = getNotionRuntimeConfig();
+  return {
+    ...config,
+    notion: config.token ? new Client({ auth: config.token }) : null
+  };
+}
 
 function textFromProperty(property: NotionProperty | undefined) {
   if (!property) return "";
@@ -80,7 +81,8 @@ function selectOrStatus(property: NotionProperty | undefined) {
 }
 
 function hasConfig(databaseId?: string) {
-  return Boolean(notion && notionToken && databaseId);
+  const { notion, token } = getNotionContext();
+  return Boolean(notion && token && databaseId);
 }
 
 function missingConfigResult<T>(): NotionFetchResult<T> {
@@ -101,10 +103,11 @@ function selectOptionsFromDatabaseProperty(property: unknown) {
 }
 
 async function getDatabaseSelectOptions(databaseId: string | undefined, propertyName: string) {
-  if (!hasConfig(databaseId)) return [];
+  const { notion, token } = getNotionContext();
+  if (!notion || !token || !databaseId) return [];
 
   try {
-    const database = await notion!.databases.retrieve({ database_id: databaseId! });
+    const database = await notion.databases.retrieve({ database_id: databaseId });
     if (!("properties" in database)) return [];
     return selectOptionsFromDatabaseProperty(database.properties[propertyName]);
   } catch {
@@ -136,31 +139,6 @@ export function mapShoppingPage(page: NotionPage): ShoppingItem {
   };
 }
 
-export function mapInventoryPage(page: NotionPage): InventoryItem {
-  const properties = page.properties;
-  const currentStock = numberFromProperty(properties["当前库存"]);
-  const minimumStock = numberFromProperty(properties["最低库存"]);
-  const rawStatus = selectOrStatus(properties["状态"]) || "正常";
-  const shouldReplenish = currentStock <= minimumStock && rawStatus !== "已下单" && rawStatus !== "已停用";
-
-  return {
-    id: page.id,
-    name: textFromProperty(properties["消耗品名称"]),
-    group: selectOrStatus(properties["类别"]),
-    currentStock,
-    unit: textFromProperty(properties["单位"]),
-    minimumStock,
-    monthlyUsage: numberFromProperty(properties["月均消耗"]),
-    preferredBrandModel: textFromProperty(properties["常用品牌型号"]),
-    preferredPlatform: selectOrStatus(properties["常用平台"]) || textFromProperty(properties["常用平台"]),
-    preferredUrl: urlFromProperty(properties["常用链接"]),
-    status: shouldReplenish ? "需要补货" : rawStatus,
-    rawStatus,
-    note: textFromProperty(properties["备注"]),
-    updatedAt: page.last_edited_time ?? ""
-  };
-}
-
 export function mapPurchaseRecordPage(page: NotionPage): PurchaseRecord {
   const properties = page.properties;
   return {
@@ -183,11 +161,12 @@ export function mapPurchaseRecordPage(page: NotionPage): PurchaseRecord {
 }
 
 export async function getShoppingItems(): Promise<NotionFetchResult<ShoppingItem>> {
+  const { notion, shoppingDatabaseId } = getNotionContext();
   if (!hasConfig(shoppingDatabaseId)) return missingConfigResult();
 
   try {
     const response = await notion!.databases.query({
-      database_id: shoppingDatabaseId!,
+      database_id: shoppingDatabaseId,
       sorts: [
         { property: "类别", direction: "ascending" },
         { property: "状态", direction: "ascending" }
@@ -207,11 +186,12 @@ export async function getShoppingItems(): Promise<NotionFetchResult<ShoppingItem
 }
 
 export async function getPurchaseRecords(): Promise<NotionFetchResult<PurchaseRecord>> {
+  const { notion, purchaseRecordsDatabaseId } = getNotionContext();
   if (!hasConfig(purchaseRecordsDatabaseId)) return missingConfigResult();
 
   try {
     const response = await notion!.databases.query({
-      database_id: purchaseRecordsDatabaseId!,
+      database_id: purchaseRecordsDatabaseId,
       sorts: [{ property: "采购日期", direction: "descending" }]
     });
     return {
@@ -227,56 +207,19 @@ export async function getPurchaseRecords(): Promise<NotionFetchResult<PurchaseRe
   }
 }
 
-export async function getInventoryItems(): Promise<NotionFetchResult<InventoryItem>> {
-  if (!hasConfig(inventoryDatabaseId)) return missingConfigResult();
-
-  try {
-    const response = await notion!.databases.query({
-      database_id: inventoryDatabaseId!,
-      sorts: [
-        { property: "类别", direction: "ascending" },
-        { property: "状态", direction: "ascending" }
-      ]
-    });
-    return {
-      data: response.results
-        .filter((page) => "properties" in page)
-        .map((page) => mapInventoryPage(page as NotionPage))
-    };
-  } catch (error) {
-    return {
-      data: [],
-      error: error instanceof Error ? error.message : "读取库存清单失败，请检查 Notion 配置。"
-    };
-  }
-}
-
 export async function getShoppingGroupOptions() {
+  const { shoppingDatabaseId } = getNotionContext();
   return withDefaultGroups(await getDatabaseSelectOptions(shoppingDatabaseId, "类别"));
 }
 
-export async function getInventoryGroupOptions() {
-  return withDefaultGroups(await getDatabaseSelectOptions(inventoryDatabaseId, "类别"));
-}
-
-export async function getItemGroupOptions() {
-  const [shoppingGroups, inventoryGroups] = await Promise.all([
-    getDatabaseSelectOptions(shoppingDatabaseId, "类别"),
-    getDatabaseSelectOptions(inventoryDatabaseId, "类别")
-  ]);
-
-  return withDefaultGroups(Array.from(new Set([...shoppingGroups, ...inventoryGroups])));
-}
-
 export async function addItemGroupOption(groupName: string) {
-  if (!notionToken || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
+  const { notion, token, shoppingDatabaseId } = getNotionContext();
+  if (!token || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
 
   const normalizedGroupName = groupName.trim();
   if (!normalizedGroupName) throw new Error("分组名称不能为空。");
 
-  const databaseIds = [shoppingDatabaseId, inventoryDatabaseId].filter((databaseId): databaseId is string =>
-    Boolean(databaseId)
-  );
+  const databaseIds = [shoppingDatabaseId].filter((databaseId): databaseId is string => Boolean(databaseId));
   if (databaseIds.length === 0) throw new Error("尚未配置 Notion 数据库。");
 
   const updatedGroups = await Promise.all(
@@ -288,16 +231,15 @@ export async function addItemGroupOption(groupName: string) {
 }
 
 export async function updateItemGroupOrder(groupNames: string[]) {
-  if (!notionToken || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
+  const { notion, token, shoppingDatabaseId } = getNotionContext();
+  if (!token || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
 
   const normalizedGroupNames = Array.from(
     new Set(groupNames.map((groupName) => groupName.trim()).filter(Boolean))
   );
   if (normalizedGroupNames.length === 0) throw new Error("分组顺序不能为空。");
 
-  const databaseIds = [shoppingDatabaseId, inventoryDatabaseId].filter((databaseId): databaseId is string =>
-    Boolean(databaseId)
-  );
+  const databaseIds = [shoppingDatabaseId].filter((databaseId): databaseId is string => Boolean(databaseId));
   if (databaseIds.length === 0) throw new Error("尚未配置 Notion 数据库。");
 
   const updatedGroups = await Promise.all(
@@ -309,7 +251,8 @@ export async function updateItemGroupOrder(groupNames: string[]) {
 }
 
 export async function updateShoppingStatus(pageId: string, status: ShoppingStatus | string) {
-  if (!notionToken || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
+  const { notion, token } = getNotionContext();
+  if (!token || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
 
   return notion.pages.update({
     page_id: pageId,
@@ -336,7 +279,8 @@ export async function createShoppingItem(input: {
   status?: ShoppingStatus | string;
   note?: string;
 }) {
-  if (!notionToken || !notion || !shoppingDatabaseId) {
+  const { notion, token, shoppingDatabaseId } = getNotionContext();
+  if (!token || !notion || !shoppingDatabaseId) {
     throw new Error("尚未配置采购清单数据库。");
   }
 
@@ -358,9 +302,67 @@ export async function createShoppingItem(input: {
     ...(hasPaymentMethodProperty ? { 支付方式: selectPropertyValue(input.paymentMethod ?? "现金") } : {})
   };
 
-  return notion.pages.create({
+  const page = await notion.pages.create({
     parent: { database_id: shoppingDatabaseId },
     properties
+  });
+
+  return mapShoppingPage(page as NotionPage);
+}
+
+export async function updateShoppingItem(pageId: string, input: {
+  name?: string;
+  group?: string;
+  brandModel?: string;
+  unitPrice?: number;
+  quantity?: number;
+  unit?: string;
+  platform?: string;
+  paymentMethod?: string;
+  productUrl?: string;
+  status?: ShoppingStatus | string;
+  note?: string;
+}) {
+  const { notion, token, shoppingDatabaseId } = getNotionContext();
+  if (!token || !notion || !shoppingDatabaseId) {
+    throw new Error("尚未配置采购清单数据库。");
+  }
+
+  const [hasUnitProperty, hasPaymentMethodProperty] = await Promise.all([
+    databaseHasProperty(shoppingDatabaseId, "单位"),
+    databaseHasProperty(shoppingDatabaseId, "支付方式")
+  ]);
+  const properties: Record<string, unknown> = {};
+
+  if (input.name !== undefined) properties["物品名称"] = titleProperty(input.name);
+  if (input.group !== undefined) properties["类别"] = selectPropertyValue(input.group);
+  if (input.brandModel !== undefined) properties["品牌型号"] = richTextProperty(input.brandModel);
+  if (input.unitPrice !== undefined) properties["单价"] = { number: input.unitPrice };
+  if (input.quantity !== undefined) properties["数量"] = { number: input.quantity };
+  if (input.platform !== undefined) properties["购买平台"] = selectPropertyValue(input.platform);
+  if (input.productUrl !== undefined) properties["商品链接"] = { url: input.productUrl.trim() || null };
+  if (input.status !== undefined) properties["状态"] = selectPropertyValue(input.status);
+  if (input.note !== undefined) properties["备注"] = richTextProperty(input.note);
+  if (hasUnitProperty && input.unit !== undefined) properties["单位"] = richTextProperty(input.unit.trim() || "件");
+  if (hasPaymentMethodProperty && input.paymentMethod !== undefined) {
+    properties["支付方式"] = selectPropertyValue(input.paymentMethod || "现金");
+  }
+
+  const page = await notion.pages.update({
+    page_id: pageId,
+    properties: properties as NotionPageUpdateProperties
+  });
+
+  return mapShoppingPage(page as NotionPage);
+}
+
+export async function archiveShoppingItem(pageId: string) {
+  const { notion, token } = getNotionContext();
+  if (!token || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
+
+  return notion.pages.update({
+    page_id: pageId,
+    archived: true
   });
 }
 
@@ -379,7 +381,8 @@ export async function createPurchaseRecord(input: {
   sourceShoppingItemId?: string;
   note?: string;
 }) {
-  if (!notionToken || !notion || !purchaseRecordsDatabaseId) {
+  const { notion, token, purchaseRecordsDatabaseId } = getNotionContext();
+  if (!token || !notion || !purchaseRecordsDatabaseId) {
     throw new Error("尚未配置采购记录数据库。");
   }
 
@@ -411,8 +414,11 @@ export async function createPurchaseRecord(input: {
 }
 
 async function databaseHasProperty(databaseId: string, propertyName: string) {
+  const { notion } = getNotionContext();
+  if (!notion) return false;
+
   try {
-    const database = await notion!.databases.retrieve({ database_id: databaseId });
+    const database = await notion.databases.retrieve({ database_id: databaseId });
     return "properties" in database && Boolean(database.properties[propertyName]);
   } catch {
     return false;
@@ -420,7 +426,10 @@ async function databaseHasProperty(databaseId: string, propertyName: string) {
 }
 
 async function addDatabaseSelectOption(databaseId: string, propertyName: string, optionName: string): Promise<string[]> {
-  const database = await notion!.databases.retrieve({ database_id: databaseId });
+  const { notion } = getNotionContext();
+  if (!notion) throw new Error("尚未配置 NOTION_TOKEN。");
+
+  const database = await notion.databases.retrieve({ database_id: databaseId });
   if (!("properties" in database)) throw new Error("无法读取 Notion 数据库字段。");
 
   const property = database.properties[propertyName] as NotionDatabaseProperty | undefined;
@@ -445,7 +454,7 @@ async function addDatabaseSelectOption(databaseId: string, propertyName: string,
     }
   ];
 
-  await notion!.databases.update({
+  await notion.databases.update({
     database_id: databaseId,
     properties: {
       [propertyName]: {
@@ -464,7 +473,10 @@ async function updateDatabaseSelectOrder(
   propertyName: string,
   orderedNames: string[]
 ): Promise<string[]> {
-  const database = await notion!.databases.retrieve({ database_id: databaseId });
+  const { notion } = getNotionContext();
+  if (!notion) throw new Error("尚未配置 NOTION_TOKEN。");
+
+  const database = await notion.databases.retrieve({ database_id: databaseId });
   if (!("properties" in database)) throw new Error("无法读取 Notion 数据库字段。");
 
   const property = database.properties[propertyName] as NotionDatabaseProperty | undefined;
@@ -487,7 +499,7 @@ async function updateDatabaseSelectOrder(
   const remainingOptions = existingOptions.filter((option) => !orderedNames.includes(option.name));
   const nextOptions = [...orderedExistingOptions, ...remainingOptions];
 
-  await notion!.databases.update({
+  await notion.databases.update({
     database_id: databaseId,
     properties: {
       [propertyName]: {
@@ -499,34 +511,6 @@ async function updateDatabaseSelectOrder(
   });
 
   return nextOptions.map((option) => option.name);
-}
-
-export async function updateInventoryStock(pageId: string, currentStock: number) {
-  if (!notionToken || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
-
-  return notion.pages.update({
-    page_id: pageId,
-    properties: {
-      当前库存: {
-        number: currentStock
-      }
-    }
-  });
-}
-
-export async function updateInventoryStatus(pageId: string, status: InventoryStatus | string) {
-  if (!notionToken || !notion) throw new Error("尚未配置 NOTION_TOKEN。");
-
-  return notion.pages.update({
-    page_id: pageId,
-    properties: {
-      状态: {
-        select: {
-          name: status
-        }
-      }
-    }
-  });
 }
 
 function titleProperty(content: string) {

@@ -1,0 +1,18 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: baby-nest-list:local
+    container_name: baby-nest-list
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+    volumes:
+      - ./.env.local:/app/.env.local
+    ports:
+      - "3000:3000"
