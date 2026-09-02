@@ -1,5 +1,6 @@
 FROM node:20-alpine AS base
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV TZ=Asia/Shanghai
 RUN corepack enable
 WORKDIR /app
 
@@ -17,7 +18,10 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=6000
 ENV HOSTNAME=0.0.0.0
+ENV TZ=Asia/Shanghai
 WORKDIR /app
+
+RUN apk add --no-cache tzdata
 
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static

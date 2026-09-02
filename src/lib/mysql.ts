@@ -172,7 +172,7 @@ function getPool() {
         idleTimeout: 60_000,
         enableKeepAlive: true,
         namedPlaceholders: true,
-        timezone: "Z"
+        timezone: "+08:00"
       })
     };
   }

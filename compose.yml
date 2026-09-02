@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${APP_IMAGE:-ghcr.io/heshixiancn/baby-nest-list:sha-4b6df42}
+    image: ${APP_IMAGE:-ghcr.io/heshixiancn/baby-nest-list:sha-58bfe18}
     container_name: baby-nest-list
     restart: unless-stopped
     env_file:
@@ -9,5 +9,6 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
+      TZ: Asia/Shanghai
     ports:
       - "3000:3000"
