@@ -4,7 +4,13 @@ export const ITEM_GROUPS = [
   "宝宝生活耗材"
 ] as const;
 
-export const SHOPPING_STATUSES = ["待购买", "已下单", "已到货", "暂缓", "已放弃"] as const;
+export const SHOPPING_STATUSES = [
+  "待购买",
+  "已下单",
+  "已到货",
+  "暂缓",
+  "已放弃"
+] as const;
 
 export const PURCHASE_PLATFORMS = [
   "京东",
@@ -58,7 +64,7 @@ export interface PurchaseRecord {
   updatedAt: string;
 }
 
-export interface NotionFetchResult<T> {
+export interface DatabaseFetchResult<T> {
   data: T[];
   error?: string;
   missingConfig?: boolean;

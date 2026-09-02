@@ -1,20 +1,30 @@
 import { ShoppingListTable } from "@/components/ShoppingListTable";
-import { NotionSetupGuide } from "@/components/NotionSetupGuide";
-import { hasExistingNotionDatabaseConfig } from "@/lib/notion-config";
-import { getShoppingGroupOptions, getShoppingItems } from "@/lib/notion";
+import {
+  getPrimaryDatabaseConfigError,
+  getPrimaryDatabaseLabel,
+  getShoppingGroupOptions,
+  getShoppingItems,
+  hasCompletePrimaryDatabaseConfig
+} from "@/lib/data-store";
 
 export const dynamic = "force-dynamic";
 
 export default async function ShoppingListPage() {
-  if (!hasExistingNotionDatabaseConfig()) {
+  if (!hasCompletePrimaryDatabaseConfig()) {
     return (
       <main className="page-shell">
-        <NotionSetupGuide />
+        <section className="panel p-5 text-sm text-slate-600">
+          当前主数据源是 {getPrimaryDatabaseLabel()}。
+          {getPrimaryDatabaseConfigError()}
+        </section>
       </main>
     );
   }
 
-  const [result, groupOptions] = await Promise.all([getShoppingItems(), getShoppingGroupOptions()]);
+  const [result, groupOptions] = await Promise.all([
+    getShoppingItems(),
+    getShoppingGroupOptions()
+  ]);
 
   return (
     <main className="page-shell space-y-4">

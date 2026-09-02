@@ -1,181 +1,258 @@
-import Link from "next/link";
-import { NotionSetupGuide } from "@/components/NotionSetupGuide";
-import { StatCard } from "@/components/StatCard";
-import { hasExistingNotionDatabaseConfig } from "@/lib/notion-config";
-import { getShoppingGroupOptions, getShoppingItems } from "@/lib/notion";
-import { formatCurrency } from "@/lib/utils";
+import { HomeActionGrid } from "@/components/HomeActionGrid";
+import { CareTrendsDashboard } from "@/components/CareTrendsDashboard";
+import {
+  getPrimaryDatabaseConfigError,
+  getPrimaryDatabaseLabel,
+  hasCompletePrimaryDatabaseConfig
+} from "@/lib/data-store";
+import { getBabyReference } from "@/lib/baby-reference";
+import { getHomeCountdown } from "@/lib/care-countdown";
+import { getCarePrediction } from "@/lib/care-prediction";
+import { getCareTrends, getSleepTimeline } from "@/lib/mysql";
 
 export const dynamic = "force-dynamic";
 
-export default async function HomePage() {
-  if (!hasExistingNotionDatabaseConfig()) {
-    return (
-      <main className="page-shell">
-        <NotionSetupGuide />
-      </main>
-    );
+const recordActions = [
+  {
+    href: "/care/feeding",
+    label: "喂养",
+    icon: "🍼",
+    hint: "feeding",
+    tone: "siri-feeding",
+    motion: "siri-motion-gentle",
+    delay: "0ms"
+  },
+  {
+    href: "/care/diaper",
+    label: "尿布",
+    icon: "🧷",
+    hint: "diaper",
+    tone: "siri-weight",
+    motion: "siri-motion-calm",
+    delay: "120ms"
+  },
+  {
+    href: "/care/temperature",
+    label: "体温",
+    icon: "🌡️",
+    hint: "temperature",
+    tone: "siri-temperature",
+    motion: "siri-motion-warm",
+    delay: "240ms"
+  },
+  {
+    href: "/care/weight",
+    label: "体重",
+    icon: "⚖️",
+    hint: "weight",
+    tone: "siri-weight",
+    motion: "siri-motion-calm",
+    delay: "360ms"
+  },
+  {
+    href: "/care/sleep",
+    label: "睡眠",
+    icon: "🌙",
+    hint: "sleep",
+    tone: "siri-sleep",
+    motion: "siri-motion-dream",
+    delay: "480ms"
   }
+] as const;
 
-  const [shoppingResult, groupOptions] = await Promise.all([getShoppingItems(), getShoppingGroupOptions()]);
-  const shoppingItems = shoppingResult.data;
-
-  const todoItems = shoppingItems.filter((item) => item.status === "待购买");
-  const orderedItems = shoppingItems.filter((item) => item.status === "已下单");
-  const arrivedItems = shoppingItems.filter((item) => item.status === "已到货");
-  const totalAmount = shoppingItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-  const errors = [shoppingResult.error].filter(Boolean);
-  const groupSummaries = groupOptions.map((group) => {
-    const shoppingInGroup = shoppingItems.filter((item) => item.group === group);
-    const pending = shoppingInGroup.filter((item) => item.status === "待购买").length;
-    const ordered = shoppingInGroup.filter((item) => item.status === "已下单").length;
-    const arrived = shoppingInGroup.filter((item) => item.status === "已到货").length;
-    const total = shoppingInGroup.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
-    return { group, pending, ordered, arrived, total };
-  }).filter((item) => item.pending > 0 || item.ordered > 0 || item.arrived > 0 || item.total > 0);
+export default async function HomePage() {
+  const hasDatabaseConfig = hasCompletePrimaryDatabaseConfig();
+  const babyReference = getBabyReference();
+  const [countdown, prediction, trends, sleepTimeline] = await Promise.all([
+    getHomeCountdown(),
+    getCarePrediction(),
+    getCareTrends(),
+    getSleepTimeline()
+  ]);
 
   return (
-    <main className="page-shell space-y-6">
-      <section>
-        <p className="text-sm font-medium text-amber-700">开心の清单</p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950 sm:text-3xl">
-          待产包与宝宝 0-1 个月用品管理
-        </h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          采购清单、购买状态和支出记录集中管理，数据源来自 Notion。
-        </p>
-      </section>
+    <main className="page-shell relative min-h-[calc(100vh-9rem)] overflow-hidden pt-4">
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute left-1/2 top-2 h-64 w-64 -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_35%_30%,rgba(255,255,255,0.65),transparent_30%),linear-gradient(135deg,rgba(125,211,252,0.24),rgba(244,114,182,0.18),rgba(45,212,191,0.2))] blur-3xl" />
+        <div className="absolute bottom-20 right-2 h-44 w-44 rounded-full bg-gradient-to-br from-blue-200/25 to-purple-200/30 blur-3xl" />
+      </div>
 
-      {errors.length > 0 ? (
-        <section className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <p className="font-semibold">当前无法完整读取 Notion 数据</p>
-          <p className="mt-1">{errors[0]}</p>
+      <div className="flex flex-col pt-4 md:hidden">
+        <section className="mx-auto mb-4 w-full max-w-[23rem] rounded-[1.75rem] border border-white/80 bg-white/50 px-4 py-3 text-center shadow-2xl shadow-slate-200/40 backdrop-blur-2xl">
+          <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
+            Born
+          </p>
+          <h1 className="apple-hello-text mt-1.5 text-[2rem]">
+            {babyReference.ageLabel}
+          </h1>
+        </section>
+
+        <HomeActionGrid actions={recordActions} countdown={countdown} />
+      </div>
+
+      <div className="hidden space-y-5 md:block">
+        <section className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
+          <div className="rounded-[2rem] border border-white/80 bg-white/60 p-5 shadow-2xl shadow-slate-200/50 backdrop-blur-2xl">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
+                  Today
+                </p>
+                <h1 className="apple-hello-text mt-2 text-4xl">今日预测</h1>
+              </div>
+              <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-white/70">
+                动态调整
+              </span>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-5">
+              <PredictionCard
+                title="推荐奶量"
+                value={`${prediction.feeding.targetMl} ml`}
+                meta={`${prediction.feeding.minMl}–${prediction.feeding.maxMl} ml`}
+                tone="from-cyan-100/80 to-violet-100/80"
+              />
+              <PredictionCard
+                title="下次喂养"
+                value={formatPredictionTime(prediction.feeding.nextAt)}
+                meta={`约 ${formatMinutes(prediction.feeding.intervalMinutes)} 间隔`}
+                tone="from-sky-100/80 to-emerald-100/80"
+              />
+              <PredictionCard
+                title={prediction.status.isSleeping ? "预计醒来" : "预计入睡"}
+                value={formatPredictionTime(
+                  prediction.status.isSleeping
+                    ? prediction.sleep.predictedEndAt
+                    : prediction.sleep.predictedStartAt
+                )}
+                meta={`醒窗约 ${formatMinutes(prediction.sleep.wakeWindowMinutes)}`}
+                tone="from-indigo-100/80 to-pink-100/80"
+              />
+              <PredictionCard
+                title="睡眠结束"
+                value={formatPredictionTime(prediction.sleep.predictedEndAt)}
+                meta={`小睡约 ${formatMinutes(prediction.sleep.expectedNapMinutes)}`}
+                tone="from-violet-100/80 to-sky-100/80"
+              />
+              <PredictionCard
+                title="尿布提醒"
+                value={formatPredictionTime(prediction.diaper.nextPeeAt)}
+                meta={`尿${countdown.diaperPeeToday} · 便${countdown.diaperPoopToday}`}
+                tone="from-teal-100/80 to-blue-100/80"
+              />
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <MiniPrediction
+                label="预计小睡"
+                value={
+                  prediction.status.isSleeping
+                    ? `本次约到 ${formatPredictionTime(prediction.sleep.predictedEndAt)}`
+                    : `${formatPredictionTime(prediction.sleep.predictedStartAt)}–${formatPredictionTime(
+                        prediction.sleep.predictedEndAt
+                      )}`
+                }
+              />
+              <MiniPrediction
+                label="排便参考"
+                value={
+                  prediction.diaper.nextPoopAt
+                    ? formatPredictionTime(prediction.diaper.nextPoopAt)
+                    : "继续观察"
+                }
+              />
+              <MiniPrediction
+                label="体温 / 体重"
+                value={`${countdown.temperatureMeasuredToday ? "体温已测" : "体温未测"} · ${
+                  countdown.weightMeasuredToday ? "体重已测" : "体重未测"
+                }`}
+              />
+            </div>
+          </div>
+          <div className="rounded-[2rem] border border-white/80 bg-white/60 p-5 shadow-xl shadow-slate-200/40 backdrop-blur-2xl">
+            <p className="text-xs font-medium text-slate-500">出生累计</p>
+            <p className="apple-hello-text mt-2 text-4xl">
+              {babyReference.ageLabel}
+            </p>
+            <div className="mt-4 grid grid-cols-4 gap-2">
+              {recordActions.map((action) => (
+                <a
+                  key={action.href}
+                  href={action.href}
+                  className="record-soft-button rounded-2xl px-3 py-3 text-center text-sm font-medium"
+                >
+                  <span className="mr-1" aria-hidden="true">
+                    {action.icon}
+                  </span>
+                  {action.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <CareTrendsDashboard
+          trends={trends}
+          sleepTimeline={sleepTimeline}
+          compact
+        />
+      </div>
+
+      {!hasDatabaseConfig ? (
+        <section className="mx-auto mt-8 max-w-md rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <p className="font-semibold">还没有配置 MySQL</p>
+          <p className="mt-1">
+            当前主数据源是 {getPrimaryDatabaseLabel()}。
+            {getPrimaryDatabaseConfigError()}
+          </p>
         </section>
       ) : null}
-
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard title="待购买数量" value={todoItems.length} tone="amber" />
-        <StatCard title="已下单数量" value={orderedItems.length} tone="blue" />
-        <StatCard title="已到货数量" value={arrivedItems.length} tone="green" />
-        <StatCard title="采购清单总金额" value={formatCurrency(totalAmount)} tone="slate" />
-      </section>
-
-      <section>
-        <section className="panel overflow-hidden">
-          <div className="border-b border-slate-100 px-4 py-3">
-            <h2 className="font-semibold text-slate-900">分组看板</h2>
-            <p className="mt-1 text-sm text-slate-500">按分组汇总待购买、已下单、已到货数量和采购金额。</p>
-          </div>
-          {groupSummaries.length === 0 ? (
-            <p className="p-4 text-sm text-slate-500">暂无分组数据。</p>
-          ) : (
-            <div>
-              <div className="divide-y divide-slate-100 md:hidden">
-                {groupSummaries.map((item) => (
-                  <article key={item.group} className="px-4 py-3">
-                    <h3 className="font-medium text-slate-900">{item.group}</h3>
-                    <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
-                      <div>
-                        <dt className="text-xs text-slate-500">待购买</dt>
-                        <dd className="mt-1 font-semibold text-slate-900">{item.pending}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-slate-500">已下单</dt>
-                        <dd className="mt-1 font-semibold text-slate-900">{item.ordered}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs text-slate-500">金额</dt>
-                        <dd className="mt-1 font-semibold text-slate-900">{formatCurrency(item.total)}</dd>
-                      </div>
-                    </dl>
-                  </article>
-                ))}
-              </div>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[720px] text-sm">
-                  <thead className="bg-slate-50 text-left text-xs font-semibold uppercase text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">分组</th>
-                      <th className="px-4 py-3">待购买</th>
-                      <th className="px-4 py-3">已下单</th>
-                      <th className="px-4 py-3">已到货</th>
-                      <th className="px-4 py-3">采购金额</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {groupSummaries.map((item) => (
-                      <tr key={item.group}>
-                        <td className="px-4 py-3 font-medium text-slate-900">{item.group}</td>
-                        <td className="px-4 py-3 text-slate-600">{item.pending}</td>
-                        <td className="px-4 py-3 text-slate-600">{item.ordered}</td>
-                        <td className="px-4 py-3 text-slate-600">{item.arrived}</td>
-                        <td className="px-4 py-3 text-slate-600">{formatCurrency(item.total)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </section>
-      </section>
-
-      <section className="grid gap-4 lg:grid-cols-2">
-        <DashboardList
-          title="待购买清单"
-          emptyText="暂无待购买物品。"
-          items={todoItems.slice(0, 8).map((item) => ({
-            id: item.id,
-            title: item.name || "未命名",
-            meta: item.group || "未分组"
-          }))}
-          href="/shopping-list"
-        />
-        <DashboardList
-          title="最近已下单清单"
-          emptyText="暂无已下单物品。"
-          items={orderedItems.slice(0, 8).map((item) => ({
-            id: item.id,
-            title: item.name || "未命名",
-            meta: `${item.group || "未分组"} · ${item.platform || "未填写平台"}`
-          }))}
-          href="/shopping-list"
-        />
-      </section>
     </main>
   );
 }
 
-function DashboardList({
+function PredictionCard({
   title,
-  emptyText,
-  items,
-  href
+  value,
+  meta,
+  tone
 }: {
   title: string;
-  emptyText: string;
-  items: Array<{ id: string; title: string; meta: string }>;
-  href: string;
+  value: string;
+  meta: string;
+  tone: string;
 }) {
   return (
-    <section className="panel overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
-        <h2 className="font-semibold text-slate-900">{title}</h2>
-        <Link href={href} className="text-sm font-medium text-amber-700 hover:underline">
-          查看
-        </Link>
-      </div>
-      {items.length === 0 ? (
-        <p className="p-4 text-sm text-slate-500">{emptyText}</p>
-      ) : (
-        <ul className="divide-y divide-slate-100">
-          {items.map((item) => (
-            <li key={item.id} className="px-4 py-3">
-              <p className="font-medium text-slate-900">{item.title}</p>
-              <p className="mt-1 text-sm text-slate-500">{item.meta}</p>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
+    <div
+      className={`rounded-[1.5rem] border border-white/80 bg-gradient-to-br ${tone} p-4 shadow-sm ring-1 ring-white/60 backdrop-blur-2xl`}
+    >
+      <p className="text-xs font-medium text-slate-500">{title}</p>
+      <p className="apple-hello-text mt-2 text-2xl tabular-nums">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{meta}</p>
+    </div>
   );
+}
+
+function MiniPrediction({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[1.25rem] bg-white/45 px-4 py-3 ring-1 ring-white/70">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className="apple-hello-text mt-1 text-lg">{value}</p>
+    </div>
+  );
+}
+
+function formatPredictionTime(iso: string | null) {
+  if (!iso) return "待记录";
+  return new Date(iso).toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatMinutes(minutes: number) {
+  if (minutes < 60) return `${minutes} 分钟`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours}小时${rest}分` : `${hours}小时`;
 }

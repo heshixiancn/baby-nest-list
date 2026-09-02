@@ -4,16 +4,40 @@
 
 :root {
   color-scheme: light;
-  --background: #fffaf3;
+  --background: #f7f8fb;
   --foreground: #1f2937;
 }
 
 body {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(220, 252, 231, 0.7), transparent 28rem),
-    linear-gradient(180deg, #fffaf3 0%, #ffffff 46%, #f8fafc 100%);
+    radial-gradient(
+      circle at 18% 8%,
+      rgba(125, 211, 252, 0.42),
+      transparent 22rem
+    ),
+    radial-gradient(
+      circle at 84% 16%,
+      rgba(244, 114, 182, 0.28),
+      transparent 20rem
+    ),
+    radial-gradient(
+      circle at 58% 92%,
+      rgba(196, 181, 253, 0.34),
+      transparent 24rem
+    ),
+    linear-gradient(180deg, #f8fafc 0%, #ffffff 46%, #f3f6fb 100%);
   color: var(--foreground);
+  font-family:
+    ui-rounded,
+    "SF Pro Rounded",
+    "SF Pro Display",
+    -apple-system,
+    BlinkMacSystemFont,
+    "PingFang SC",
+    "Hiragino Sans GB",
+    "Microsoft YaHei UI",
+    sans-serif;
 }
 
 a {
@@ -70,9 +94,123 @@ textarea {
   }
 }
 
+@keyframes siri-float {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-3px) scale(1.01);
+  }
+}
+
+@keyframes siri-breathe {
+  0%,
+  100% {
+    filter: saturate(1.05) hue-rotate(0deg);
+    opacity: 0.92;
+    transform: scale(1);
+  }
+  45% {
+    filter: saturate(1.35) hue-rotate(24deg);
+    opacity: 1;
+    transform: scale(1.045);
+  }
+  70% {
+    filter: saturate(1.22) hue-rotate(-18deg);
+    transform: scale(1.018);
+  }
+}
+
+@keyframes voice-cloud-drift {
+  0% {
+    transform: translate3d(-2%, -3%, 0) scale(1.02);
+  }
+  50% {
+    transform: translate3d(3%, 4%, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(-2%, -3%, 0) scale(1.02);
+  }
+}
+
+@keyframes voice-band-wave {
+  0%,
+  100% {
+    transform: translate3d(-7%, -4%, 0) scaleX(1.08) scaleY(0.92);
+    border-radius: 48% 52% 45% 55% / 54% 42% 58% 46%;
+  }
+  45% {
+    transform: translate3d(5%, 6%, 0) scaleX(1.14) scaleY(0.96);
+    border-radius: 52% 48% 58% 42% / 44% 58% 42% 56%;
+  }
+  72% {
+    transform: translate3d(2%, -2%, 0) scaleX(1.04) scaleY(1.02);
+    border-radius: 45% 55% 52% 48% / 56% 44% 52% 48%;
+  }
+}
+
+@keyframes siri-liquid-shift {
+  0%,
+  100% {
+    background-position:
+      34% 26%,
+      76% 32%,
+      28% 78%,
+      72% 74%,
+      center;
+  }
+  50% {
+    background-position:
+      44% 18%,
+      66% 42%,
+      36% 68%,
+      78% 62%,
+      center;
+  }
+}
+
+@keyframes siri-pulse-ring {
+  0%,
+  100% {
+    box-shadow:
+      0 18px 42px rgba(99, 102, 241, 0.18),
+      0 0 0 0 rgba(255, 255, 255, 0.7);
+  }
+  50% {
+    box-shadow:
+      0 22px 54px rgba(236, 72, 153, 0.24),
+      0 0 0 8px rgba(255, 255, 255, 0.18);
+  }
+}
+
+@keyframes breastfeeding-timer-glow {
+  0%,
+  100% {
+    opacity: 0.66;
+    transform: translate3d(-1%, -1%, 0) scale(0.98);
+  }
+  50% {
+    opacity: 0.98;
+    transform: translate3d(1%, 1%, 0) scale(1.04);
+  }
+}
+
+@keyframes timer-live-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.18);
+  }
+}
+
 @layer components {
   .page-shell {
-    @apply mx-auto w-full max-w-7xl px-3 py-4 sm:px-6 sm:py-6 lg:px-8;
+    @apply mx-auto w-full max-w-7xl px-3 pb-6 pt-4 sm:px-6 sm:py-6 lg:px-8;
   }
 
   .panel {
@@ -123,6 +261,601 @@ textarea {
   .chart-bar {
     animation: happy-chart-grow 420ms ease-out both;
     transform-origin: left center;
+  }
+
+  .apple-hello-text {
+    background: linear-gradient(
+      112deg,
+      #334155 0%,
+      #475569 34%,
+      #7c8da5 62%,
+      #263447 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    font-family:
+      ui-rounded,
+      "SF Pro Rounded",
+      "SF Pro Display",
+      -apple-system,
+      BlinkMacSystemFont,
+      "PingFang SC",
+      "Hiragino Sans GB",
+      "Microsoft YaHei UI",
+      sans-serif;
+    font-variation-settings: "wght" 430;
+    font-weight: 430;
+    letter-spacing: -0.035em;
+    line-height: 1.08;
+    text-rendering: geometricPrecision;
+  }
+
+  .record-page-shell {
+    @apply mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-20 pt-6;
+  }
+
+  .record-page-shell-compact {
+    @apply pt-1.5;
+  }
+
+  .record-page-heading {
+    @apply mb-5 px-1;
+  }
+
+  .record-eyebrow {
+    @apply mb-1 text-xs font-medium uppercase tracking-[0.24em] text-slate-400;
+  }
+
+  .record-card {
+    @apply overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/60 shadow-2xl shadow-slate-200/50 backdrop-blur-2xl;
+  }
+
+  .record-segment {
+    @apply grid grid-cols-2 gap-1 rounded-full bg-white/45 p-1 ring-1 ring-white/70;
+  }
+
+  .record-field {
+    @apply h-11 w-full min-w-0 max-w-full rounded-2xl border border-white/70 bg-white/70 px-4 text-base text-slate-900 outline-none shadow-sm transition focus:border-slate-300 focus:bg-white focus:ring-4 focus:ring-slate-200/60;
+    box-sizing: border-box;
+  }
+
+  .record-time-field {
+    @apply block w-full min-w-0 max-w-full appearance-none overflow-hidden text-center;
+    -webkit-appearance: none;
+  }
+
+  .record-time-picker {
+    @apply relative min-w-0 overflow-hidden;
+  }
+
+  .record-time-display {
+    @apply mt-1 flex h-11 w-full min-w-0 max-w-full items-center justify-center overflow-hidden rounded-2xl border border-white/75 bg-white/60 px-3 text-center shadow-sm ring-1 ring-white/60 backdrop-blur-xl transition active:scale-[0.99];
+  }
+
+  .record-native-time-input {
+    position: absolute;
+    inset: 1.55rem 0 0 0;
+    width: 100%;
+    height: 2.75rem;
+    min-width: 0;
+    max-width: 100%;
+    border: 0;
+    opacity: 0.01;
+    cursor: pointer;
+  }
+
+  .record-step-button {
+    @apply inline-flex h-14 items-center justify-center rounded-2xl border border-white/70 bg-white/70 text-2xl font-light text-slate-800 shadow-sm transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .record-wheel {
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .record-wheel::-webkit-scrollbar {
+    display: none;
+  }
+
+  .record-primary-button {
+    @apply h-12 items-center justify-center rounded-full border border-white/80 bg-gradient-to-r from-emerald-300/90 via-sky-300/90 to-violet-300/90 px-7 text-base font-semibold text-slate-700 shadow-xl shadow-sky-200/35 ring-1 ring-white/70 transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .record-soft-button {
+    @apply border border-white/75 bg-white/65 text-slate-600 shadow-sm ring-1 ring-white/60 backdrop-blur-xl transition active:scale-[0.98] disabled:opacity-40;
+  }
+
+  .record-accent-button {
+    @apply border border-white/80 bg-gradient-to-r from-emerald-300/90 via-sky-300/90 to-violet-300/90 text-slate-700 shadow-xl shadow-sky-200/35 ring-1 ring-white/70 backdrop-blur-xl transition active:scale-[0.98] disabled:opacity-40;
+  }
+
+  .record-round-action {
+    @apply flex h-[4.35rem] w-[4.35rem] flex-col items-center justify-center rounded-full border border-white/85 bg-gradient-to-br from-emerald-200/95 via-sky-200/95 to-violet-200/95 font-semibold text-slate-700 shadow-xl shadow-sky-200/35 ring-1 ring-white/80 backdrop-blur-2xl transition active:scale-95 disabled:opacity-50;
+  }
+
+  .record-round-action-large {
+    @apply h-[6.8rem] w-[6.8rem] shadow-2xl shadow-sky-200/45;
+  }
+
+  .record-round-action-stop {
+    @apply bg-gradient-to-br from-pink-200/95 via-orange-200/95 to-violet-200/95 shadow-pink-200/35;
+  }
+
+  .record-selected-button {
+    @apply border border-white/85 bg-gradient-to-r from-emerald-200/90 via-sky-200/90 to-violet-200/90 text-slate-700 shadow-lg shadow-sky-200/30 ring-1 ring-white/80 backdrop-blur-xl;
+  }
+
+  .breastfeeding-timer-active::before {
+    content: "";
+    position: absolute;
+    inset: -28%;
+    background:
+      radial-gradient(
+        circle at 24% 28%,
+        rgba(52, 211, 153, 0.32),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 74% 18%,
+        rgba(125, 211, 252, 0.24),
+        transparent 28%
+      ),
+      radial-gradient(
+        circle at 46% 82%,
+        rgba(216, 180, 254, 0.24),
+        transparent 32%
+      );
+    filter: blur(18px);
+    opacity: 0.88;
+    animation: breastfeeding-timer-glow 3.8s ease-in-out infinite;
+  }
+
+  .timer-live-dot {
+    animation: timer-live-pulse 1.2s ease-in-out infinite;
+  }
+
+  .home-countdown-timer {
+    position: relative;
+    display: inline-flex;
+    min-width: 4.6rem;
+    flex-direction: column;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.58);
+    padding: 0.36rem 0.56rem 0.42rem;
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.88),
+      0 8px 18px rgba(15, 23, 42, 0.08);
+    backdrop-filter: blur(14px) saturate(1.18);
+  }
+
+  .home-countdown-active::before {
+    content: "";
+    position: absolute;
+    inset: -45%;
+    background:
+      radial-gradient(
+        circle at 24% 24%,
+        rgba(52, 211, 153, 0.34),
+        transparent 28%
+      ),
+      radial-gradient(
+        circle at 72% 70%,
+        rgba(125, 211, 252, 0.28),
+        transparent 32%
+      ),
+      radial-gradient(
+        circle at 50% 50%,
+        rgba(255, 255, 255, 0.5),
+        transparent 36%
+      );
+    filter: blur(10px);
+    opacity: 0.82;
+    animation: breastfeeding-timer-glow 3.8s ease-in-out infinite;
+  }
+
+  .home-countdown-timer > span {
+    position: relative;
+    z-index: 1;
+  }
+
+  .record-save-bar {
+    @apply fixed inset-x-0 bottom-0 z-30 border-t border-white/70 bg-white/70 p-2.5 pb-[calc(env(safe-area-inset-bottom)+0.6rem)] shadow-[0_-8px_24px_rgba(15,23,42,0.06)] backdrop-blur-2xl md:static md:border-t md:bg-white/40 md:pb-3 md:shadow-none;
+  }
+
+  .record-success {
+    @apply rounded-2xl border border-emerald-100 bg-emerald-50/80 px-4 py-3 text-sm font-medium text-emerald-800;
+  }
+
+  .record-error {
+    @apply rounded-2xl border border-rose-100 bg-rose-50/80 px-4 py-3 text-sm font-medium text-rose-700;
+  }
+
+  .voice-orb {
+    animation:
+      siri-float 6.2s ease-in-out infinite,
+      siri-pulse-ring 5.8s ease-in-out infinite;
+    box-shadow:
+      0 16px 36px rgba(15, 23, 42, 0.075),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.72);
+    isolation: isolate;
+  }
+
+  .voice-orb-clip {
+    clip-path: circle(50% at 50% 50%);
+    overflow: hidden;
+    transform: translateZ(0);
+  }
+
+  .voice-orb-cloud {
+    position: absolute;
+    z-index: 0;
+    background: conic-gradient(
+      from 128deg at 52% 50%,
+      rgba(255, 255, 255, 0.28),
+      rgba(125, 211, 252, 0.5),
+      rgba(34, 197, 94, 0.62),
+      rgba(255, 255, 255, 0.42),
+      rgba(129, 140, 248, 0.48),
+      rgba(244, 114, 182, 0.45),
+      rgba(255, 255, 255, 0.28)
+    );
+    filter: blur(10px) saturate(1.18);
+    opacity: 0.58;
+    animation:
+      siri-breathe 7.4s ease-in-out infinite,
+      voice-cloud-drift 8.8s ease-in-out infinite;
+  }
+
+  .voice-orb-clip::after {
+    position: absolute;
+    inset: 9%;
+    z-index: 1;
+    border-radius: 9999px;
+    background:
+      radial-gradient(
+        ellipse at 36% 24%,
+        rgba(255, 255, 255, 0.72),
+        transparent 26%
+      ),
+      radial-gradient(
+        ellipse at 62% 76%,
+        rgba(255, 255, 255, 0.16),
+        transparent 34%
+      );
+    content: "";
+    mix-blend-mode: screen;
+    pointer-events: none;
+  }
+
+  .voice-orb-band {
+    z-index: 0;
+    background:
+      radial-gradient(
+        ellipse at 28% 44%,
+        rgba(255, 255, 255, 0.86),
+        rgba(255, 255, 255, 0.52) 20%,
+        rgba(255, 255, 255, 0) 43%
+      ),
+      radial-gradient(
+        ellipse at 72% 42%,
+        rgba(255, 255, 255, 0.58),
+        transparent 36%
+      ),
+      linear-gradient(
+        102deg,
+        transparent 18%,
+        rgba(255, 255, 255, 0.72) 42%,
+        rgba(255, 255, 255, 0.1) 62%,
+        transparent 82%
+      );
+    filter: blur(5px);
+    opacity: 0.76;
+    animation: voice-band-wave 6.8s ease-in-out infinite;
+  }
+
+  .voice-orb-mist {
+    background:
+      radial-gradient(
+        ellipse at 54% 22%,
+        rgba(255, 255, 255, 0.44),
+        transparent 28%
+      ),
+      radial-gradient(
+        ellipse at 48% 68%,
+        rgba(255, 255, 255, 0.2),
+        transparent 42%
+      );
+    filter: blur(8px);
+    opacity: 0.72;
+    animation: voice-cloud-drift 9.6s ease-in-out infinite reverse;
+  }
+
+  .voice-orb-glass {
+    z-index: 2;
+    background:
+      radial-gradient(
+        circle at 34% 22%,
+        rgba(255, 255, 255, 0.95),
+        transparent 20%
+      ),
+      radial-gradient(
+        circle at 52% 58%,
+        rgba(255, 255, 255, 0.22),
+        transparent 42%
+      ),
+      linear-gradient(
+        145deg,
+        rgba(255, 255, 255, 0.38),
+        rgba(255, 255, 255, 0.08)
+      );
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.9),
+      inset 0 -18px 36px rgba(15, 23, 42, 0.05),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.62);
+    backdrop-filter: blur(10px) saturate(1.18);
+    pointer-events: none;
+  }
+
+  .siri-feeding {
+    background: linear-gradient(
+      135deg,
+      rgba(110, 231, 183, 0.9),
+      rgba(56, 189, 248, 0.78)
+    );
+  }
+
+  .siri-feeding .voice-orb-cloud {
+    background:
+      radial-gradient(
+        ellipse at 28% 24%,
+        rgba(255, 255, 255, 0.34),
+        transparent 30%
+      ),
+      radial-gradient(
+        ellipse at 72% 34%,
+        rgba(45, 212, 191, 0.56),
+        transparent 42%
+      ),
+      linear-gradient(
+        152deg,
+        rgba(34, 197, 94, 0.78),
+        rgba(125, 211, 252, 0.54) 54%,
+        rgba(255, 255, 255, 0.22)
+      );
+  }
+
+  .siri-feeding .voice-orb-band {
+    background:
+      radial-gradient(
+        ellipse at 22% 42%,
+        rgba(255, 255, 255, 0.88),
+        rgba(255, 255, 255, 0.46) 20%,
+        transparent 42%
+      ),
+      linear-gradient(
+        100deg,
+        transparent 12%,
+        rgba(255, 255, 255, 0.7) 39%,
+        rgba(255, 255, 255, 0.12) 66%,
+        transparent 84%
+      );
+  }
+
+  .siri-temperature {
+    background: linear-gradient(
+      135deg,
+      rgba(251, 113, 133, 0.8),
+      rgba(217, 70, 239, 0.62)
+    );
+  }
+
+  .siri-temperature .voice-orb-cloud {
+    background:
+      radial-gradient(
+        ellipse at 34% 76%,
+        rgba(255, 255, 255, 0.28),
+        transparent 34%
+      ),
+      radial-gradient(
+        ellipse at 68% 26%,
+        rgba(251, 113, 133, 0.62),
+        transparent 38%
+      ),
+      linear-gradient(
+        34deg,
+        rgba(244, 114, 182, 0.7),
+        rgba(251, 191, 36, 0.3) 45%,
+        rgba(56, 189, 248, 0.42)
+      );
+  }
+
+  .siri-temperature .voice-orb-band {
+    background:
+      radial-gradient(
+        ellipse at 68% 34%,
+        rgba(255, 255, 255, 0.76),
+        rgba(255, 255, 255, 0.36) 20%,
+        transparent 42%
+      ),
+      linear-gradient(
+        22deg,
+        transparent 18%,
+        rgba(255, 255, 255, 0.68) 44%,
+        rgba(255, 255, 255, 0.08) 68%,
+        transparent 86%
+      );
+  }
+
+  .siri-weight {
+    background: linear-gradient(
+      135deg,
+      rgba(125, 211, 252, 0.86),
+      rgba(129, 140, 248, 0.72)
+    );
+  }
+
+  .siri-weight .voice-orb-cloud {
+    background:
+      radial-gradient(
+        ellipse at 24% 68%,
+        rgba(255, 255, 255, 0.32),
+        transparent 36%
+      ),
+      radial-gradient(
+        ellipse at 76% 32%,
+        rgba(96, 165, 250, 0.58),
+        transparent 42%
+      ),
+      linear-gradient(
+        128deg,
+        rgba(59, 130, 246, 0.62),
+        rgba(45, 212, 191, 0.34) 48%,
+        rgba(167, 139, 250, 0.52)
+      );
+  }
+
+  .siri-weight .voice-orb-band {
+    background:
+      radial-gradient(
+        ellipse at 42% 28%,
+        rgba(255, 255, 255, 0.8),
+        rgba(255, 255, 255, 0.38) 18%,
+        transparent 40%
+      ),
+      linear-gradient(
+        168deg,
+        transparent 16%,
+        rgba(255, 255, 255, 0.64) 43%,
+        rgba(255, 255, 255, 0.1) 68%,
+        transparent 86%
+      );
+  }
+
+  .siri-sleep {
+    background: linear-gradient(
+      135deg,
+      rgba(167, 139, 250, 0.82),
+      rgba(244, 114, 182, 0.62)
+    );
+  }
+
+  .siri-sleep .voice-orb-cloud {
+    background:
+      radial-gradient(
+        ellipse at 72% 72%,
+        rgba(255, 255, 255, 0.26),
+        transparent 36%
+      ),
+      radial-gradient(
+        ellipse at 30% 30%,
+        rgba(167, 139, 250, 0.62),
+        transparent 42%
+      ),
+      linear-gradient(
+        58deg,
+        rgba(99, 102, 241, 0.58),
+        rgba(244, 114, 182, 0.42) 52%,
+        rgba(125, 211, 252, 0.34)
+      );
+  }
+
+  .siri-sleep .voice-orb-band {
+    background:
+      radial-gradient(
+        ellipse at 30% 64%,
+        rgba(255, 255, 255, 0.78),
+        rgba(255, 255, 255, 0.32) 19%,
+        transparent 44%
+      ),
+      linear-gradient(
+        134deg,
+        transparent 14%,
+        rgba(255, 255, 255, 0.62) 38%,
+        rgba(255, 255, 255, 0.08) 66%,
+        transparent 86%
+      );
+  }
+
+  .siri-motion-gentle {
+    animation-duration: 6.3s, 5.8s;
+  }
+
+  .siri-motion-gentle .voice-orb-cloud {
+    animation-duration: 8.8s;
+  }
+
+  .siri-motion-gentle .voice-orb-band {
+    animation-duration: 7.4s;
+  }
+
+  .siri-motion-gentle .voice-orb-mist {
+    animation-duration: 12s;
+  }
+
+  .siri-motion-warm {
+    animation-duration: 5.7s, 5.1s;
+  }
+
+  .siri-motion-warm .voice-orb-cloud {
+    animation-duration: 7.4s;
+  }
+
+  .siri-motion-warm .voice-orb-band {
+    animation-duration: 6.2s;
+    filter: saturate(1.3) hue-rotate(10deg);
+  }
+
+  .siri-motion-warm .voice-orb-mist {
+    animation-duration: 9.8s;
+  }
+
+  .siri-motion-calm {
+    animation-duration: 7.1s, 6.6s;
+  }
+
+  .siri-motion-calm .voice-orb-cloud {
+    animation-duration: 10.5s;
+    opacity: 0.62;
+  }
+
+  .siri-motion-calm .voice-orb-band {
+    animation-duration: 9.2s;
+    filter: saturate(1.1) hue-rotate(-10deg);
+  }
+
+  .siri-motion-calm .voice-orb-mist {
+    animation-duration: 13.4s;
+  }
+
+  .siri-motion-dream {
+    animation-duration: 6.8s, 6.1s;
+  }
+
+  .siri-motion-dream .voice-orb-cloud {
+    animation-duration: 9.6s;
+  }
+
+  .siri-motion-dream .voice-orb-band {
+    animation-duration: 8.4s;
+    filter: saturate(1.22) hue-rotate(18deg);
+  }
+
+  .siri-motion-dream .voice-orb-mist {
+    animation-duration: 14.2s;
+    opacity: 0.58;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .voice-orb,
+    .voice-orb-cloud,
+    .voice-orb-band,
+    .voice-orb-mist {
+      animation: none;
+    }
   }
 }
 

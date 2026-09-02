@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addItemGroupOption, updateItemGroupOrder } from "@/lib/notion";
+import { addItemGroupOption, updateItemGroupOrder } from "@/lib/data-store";
 
 export async function POST(request: Request) {
   try {
@@ -7,11 +7,17 @@ export async function POST(request: Request) {
     const name = body.name?.trim() ?? "";
 
     if (!name) {
-      return NextResponse.json({ error: "分组名称不能为空。" }, { status: 400 });
+      return NextResponse.json(
+        { error: "分组名称不能为空。" },
+        { status: 400 }
+      );
     }
 
     if (name.length > 30) {
-      return NextResponse.json({ error: "分组名称不能超过 30 个字。" }, { status: 400 });
+      return NextResponse.json(
+        { error: "分组名称不能超过 30 个字。" },
+        { status: 400 }
+      );
     }
 
     const groups = await addItemGroupOption(name);
@@ -29,7 +35,10 @@ export async function PATCH(request: Request) {
     const body = (await request.json()) as { groups?: unknown };
 
     if (!Array.isArray(body.groups)) {
-      return NextResponse.json({ error: "分组顺序格式不正确。" }, { status: 400 });
+      return NextResponse.json(
+        { error: "分组顺序格式不正确。" },
+        { status: 400 }
+      );
     }
 
     const groups = body.groups
@@ -38,11 +47,17 @@ export async function PATCH(request: Request) {
       .filter(Boolean);
 
     if (groups.length === 0) {
-      return NextResponse.json({ error: "分组顺序不能为空。" }, { status: 400 });
+      return NextResponse.json(
+        { error: "分组顺序不能为空。" },
+        { status: 400 }
+      );
     }
 
     if (groups.some((group) => group.length > 30)) {
-      return NextResponse.json({ error: "分组名称不能超过 30 个字。" }, { status: 400 });
+      return NextResponse.json(
+        { error: "分组名称不能超过 30 个字。" },
+        { status: 400 }
+      );
     }
 
     const updatedGroups = await updateItemGroupOrder(groups);

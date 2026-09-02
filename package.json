@@ -6,7 +6,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "notion:setup": "node scripts/setup-notion.mjs",
     "lint": "next lint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -15,6 +14,7 @@
   "dependencies": {
     "@notionhq/client": "^2.2.16",
     "clsx": "^2.1.1",
+    "mysql2": "^3.11.5",
     "next": "^14.2.25",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

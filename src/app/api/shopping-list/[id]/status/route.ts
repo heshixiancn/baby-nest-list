@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { updateShoppingStatus } from "@/lib/notion";
+import { updateShoppingStatus } from "@/lib/data-store";
 import { SHOPPING_STATUSES, type ShoppingStatus } from "@/types";
 
 function isShoppingStatus(status: string): status is ShoppingStatus {
   return (SHOPPING_STATUSES as readonly string[]).includes(status);
 }
 
-export async function PATCH(request: Request, context: { params: { id: string } }) {
+export async function PATCH(
+  request: Request,
+  context: { params: { id: string } }
+) {
   try {
     const { id } = context.params;
     const body = (await request.json()) as { status?: string };

@@ -25,7 +25,10 @@ export function FilterBar({ search, onSearchChange, filters }: FilterBarProps) {
           />
         </label>
         {filters.map((filter) => (
-          <label key={filter.label} className="flex flex-col gap-1 text-sm font-medium text-slate-600">
+          <label
+            key={filter.label}
+            className="flex flex-col gap-1 text-sm font-medium text-slate-600"
+          >
             {filter.label}
             <select
               className="field"

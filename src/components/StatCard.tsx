@@ -15,7 +15,12 @@ const toneClass = {
   slate: "bg-slate-50 text-slate-700 border-slate-100"
 };
 
-export function StatCard({ title, value, hint, tone = "slate" }: StatCardProps) {
+export function StatCard({
+  title,
+  value,
+  hint,
+  tone = "slate"
+}: StatCardProps) {
   return (
     <section className={cn("rounded-lg border p-4", toneClass[tone])}>
       <p className="text-sm font-medium opacity-80">{title}</p>

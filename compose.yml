@@ -1,9 +1,6 @@
 services:
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: baby-nest-list:local
+    image: ${APP_IMAGE:-ghcr.io/your-name/baby-nest-list:latest}
     container_name: baby-nest-list
     restart: unless-stopped
     env_file:
@@ -12,7 +9,5 @@ services:
       NODE_ENV: production
       PORT: 3000
       HOSTNAME: 0.0.0.0
-    volumes:
-      - ./.env.local:/app/.env.local
     ports:
       - "3000:3000"
