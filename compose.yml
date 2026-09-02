@@ -1,6 +1,6 @@
 services:
   app:
-    image: ${APP_IMAGE:-ghcr.io/your-name/baby-nest-list:latest}
+    image: ${APP_IMAGE:-ghcr.io/heshixiancn/baby-nest-list:sha-4b6df42}
     container_name: baby-nest-list
     restart: unless-stopped
     env_file:
