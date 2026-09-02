@@ -246,7 +246,8 @@ function formatPredictionTime(iso: string | null) {
   if (!iso) return "待记录";
   return new Date(iso).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: "Asia/Shanghai"
   });
 }
 

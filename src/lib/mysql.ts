@@ -172,7 +172,8 @@ function getPool() {
         idleTimeout: 60_000,
         enableKeepAlive: true,
         namedPlaceholders: true,
-        timezone: "+08:00"
+        timezone: "+08:00",
+        dateStrings: true
       })
     };
   }
@@ -189,7 +190,10 @@ function toNumber(value: string | number | null | undefined, fallback = 0) {
 function toIsoString(value: Date | string | null | undefined) {
   if (!value) return "";
   if (value instanceof Date) return value.toISOString();
-  const date = new Date(value);
+  const mysqlLocal = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?/);
+  const date = mysqlLocal
+    ? new Date(`${mysqlLocal[1]}-${mysqlLocal[2]}-${mysqlLocal[3]}T${mysqlLocal[4]}:${mysqlLocal[5]}:${mysqlLocal[6] ?? "00"}.${(mysqlLocal[7] ?? "0").padEnd(3, "0")}+08:00`)
+    : new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
 }
 
@@ -916,13 +920,19 @@ export async function createDiaperRecord(input: {
 export async function getTodayDiaperSummary() {
   if (!hasCompleteMysqlConfig()) return { pee: 0, poop: 0 };
   try {
+    // Use application-local day boundaries instead of MySQL CURRENT_DATE().
+    // The database server may run in UTC while the app runs in Asia/Shanghai.
+    const now = new Date();
+    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const [rows] = await getPool().query<DiaperSummaryRow[]>(
       `select
          sum(case when diaper_type in ('尿', '尿+便') then 1 else 0 end) as pee,
          sum(case when diaper_type in ('便', '尿+便') then 1 else 0 end) as poop
        from diaper_records
-       where happened_at >= current_date()
-         and happened_at < date_add(current_date(), interval 1 day)`
+       where happened_at >= :dayStart
+         and happened_at < :dayEnd`,
+      { dayStart, dayEnd }
     );
     return {
       pee: toNumber(rows[0]?.pee),

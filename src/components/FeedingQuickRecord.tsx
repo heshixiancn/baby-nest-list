@@ -591,7 +591,8 @@ function formatTimer(startedAt: string, now: Date) {
 function formatClock(iso: string) {
   return new Date(iso).toLocaleTimeString("zh-CN", {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    timeZone: "Asia/Shanghai"
   });
 }
 

@@ -63,11 +63,16 @@ export function HomeActionGrid({
                 }`}
               >
                 <span className="text-[0.58rem] leading-none text-slate-500">
-                  {hint.label}
+                  {hint.label.split(" · ")[0]}
                 </span>
-                <span className="apple-hello-text mt-0.5 text-[0.95rem] tabular-nums leading-none">
-                  {hint.value}
+                <span className="apple-hello-text mt-0.5 text-[1.05rem] tabular-nums leading-none">
+                  {hint.label.includes(" · ") ? hint.label.split(" · ")[1] : hint.value}
                 </span>
+                {hint.label.includes(" · ") ? (
+                  <span className="mt-0.5 text-[0.55rem] tabular-nums leading-none text-slate-500">
+                    倒计时 {hint.value}
+                  </span>
+                ) : null}
               </span>
             </span>
           </Link>
@@ -97,14 +102,15 @@ function getHint(
   if (hint === "sleep") {
     if (!now) {
       if (countdown.sleepStartedAt)
-        return { label: "已睡", value: "计时中", active: false };
+        return { label: countdown.sleepExpectedEndAt ? `已睡 · ${formatClock(countdown.sleepExpectedEndAt)}` : "已睡", value: "计时中", active: false };
       return countdown.sleepNextAt
         ? { label: "预计睡眠", value: "计算中", active: false }
         : { label: "预计睡眠", value: "待记录", active: false };
     }
 
     if (countdown.sleepStartedAt) {
-      return formatElapsed("已睡", countdown.sleepStartedAt, now);
+      const elapsed = formatElapsed("已睡", countdown.sleepStartedAt, now);
+      return { ...elapsed, label: countdown.sleepExpectedEndAt ? `已睡 · ${formatClock(countdown.sleepExpectedEndAt)}` : elapsed.label };
     }
 
     return countdown.sleepNextAt
@@ -154,18 +160,28 @@ function getHint(
     : { label: "体重", value: "今日未测", active: false };
 }
 
+function formatClock(iso: string) {
+  return new Date(iso).toLocaleTimeString("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Shanghai"
+  });
+}
+
 function formatCountdown(label: string, iso: string, now: number) {
   const diffSeconds = Math.floor((new Date(iso).getTime() - now) / 1000);
+  const clock = formatClock(iso);
   if (diffSeconds <= 0) {
     return {
-      label,
+      label: `${label} · ${clock}`,
       value: `超 ${formatTimer(Math.abs(diffSeconds))}`,
       active: true
     };
   }
 
   return {
-    label,
+    label: `${label} · ${clock}`,
     value: formatTimer(diffSeconds),
     active: true
   };

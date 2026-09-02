@@ -11,6 +11,7 @@ export interface HomeCountdown {
   feedingNextAt: string | null;
   sleepNextAt: string | null;
   sleepStartedAt: string | null;
+  sleepExpectedEndAt: string | null;
   temperatureLastAt: string | null;
   temperatureMeasuredToday: boolean;
   weightLastAt: string | null;
@@ -37,6 +38,7 @@ export async function getHomeCountdown(): Promise<HomeCountdown> {
     return {
       feedingNextAt: prediction.feeding.nextAt,
       sleepStartedAt: openSleep?.startedAt ?? null,
+      sleepExpectedEndAt: openSleep ? prediction.sleep.predictedEndAt : null,
       sleepNextAt: openSleep ? null : prediction.sleep.nextAt,
       temperatureLastAt: temperatureAt,
       temperatureMeasuredToday: isToday(temperatureAt),
@@ -57,6 +59,7 @@ function emptyCountdown(): HomeCountdown {
     feedingNextAt: null,
     sleepNextAt: null,
     sleepStartedAt: null,
+    sleepExpectedEndAt: null,
     temperatureLastAt: null,
     temperatureMeasuredToday: false,
     weightLastAt: null,
