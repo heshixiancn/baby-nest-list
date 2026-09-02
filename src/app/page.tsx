@@ -25,7 +25,7 @@ const recordActions = [
   {
     href: "/care/diaper",
     label: "尿布",
-    icon: "🧷",
+    icon: "💩",
     hint: "diaper",
     tone: "siri-weight",
     motion: "siri-motion-calm",
@@ -83,7 +83,7 @@ export default async function HomePage() {
             Born
           </p>
           <h1 className="apple-hello-text mt-1.5 text-[2rem]">
-            {babyReference.ageLabel}
+            {babyReference.ageLabel.replace(/^出生\s*/, "")}
           </h1>
         </section>
 
@@ -114,8 +114,8 @@ export default async function HomePage() {
               />
               <PredictionCard
                 title="下次喂养"
-                value={formatPredictionTime(prediction.feeding.nextAt)}
-                meta={`约 ${formatMinutes(prediction.feeding.intervalMinutes)} 间隔`}
+                value={formatPredictionRange(prediction.feeding.windowStartAt, prediction.feeding.windowEndAt)}
+                meta={prediction.feeding.conflictsWithSleep ? "与睡眠区间可能重叠" : `约 ${formatMinutes(prediction.feeding.intervalMinutes)} 间隔`}
                 tone="from-sky-100/80 to-emerald-100/80"
               />
               <PredictionCard
@@ -249,6 +249,11 @@ function formatPredictionTime(iso: string | null) {
     minute: "2-digit",
     timeZone: "Asia/Shanghai"
   });
+}
+
+function formatPredictionRange(start: string | null, end: string | null) {
+  if (!start || !end) return "待记录";
+  return `${formatPredictionTime(start)}–${formatPredictionTime(end)}`;
 }
 
 function formatMinutes(minutes: number) {

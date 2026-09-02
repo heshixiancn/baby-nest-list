@@ -5,6 +5,7 @@ import { currentDatetimeLocalValue } from "@/lib/time-input";
 import type { FeedingRecommendation } from "@/lib/feeding-recommendation";
 import { RecordTimePicker } from "@/components/RecordTimePicker";
 import { ValueWheel } from "@/components/ValueWheel";
+import { ViewRecordsButton } from "@/components/ViewRecordsButton";
 
 type RecordMode = "feeding" | "diaper";
 type FeedingType = "母乳" | "瓶喂" | "配方奶";
@@ -439,13 +440,10 @@ export function FeedingQuickRecord({
       </div>
 
       <div className="record-save-bar">
-        <div className="mx-auto flex max-w-7xl items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs text-slate-500">当前记录</p>
-            <p className="apple-hello-text truncate text-base">{summary}</p>
-          </div>
+        <div className="mx-auto flex max-w-md items-center gap-3">
+          <ViewRecordsButton type={mode} />
           <button
-            className="record-primary-button"
+            className="record-primary-button flex h-12 w-[48%]"
             type="button"
             onClick={
               mode === "feeding" && feedingType === "母乳"

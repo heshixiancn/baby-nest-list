@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { currentDatetimeLocalValue } from "@/lib/time-input";
+import { ViewRecordsButton } from "@/components/ViewRecordsButton";
 import { RecordTimePicker } from "@/components/RecordTimePicker";
 import type { CarePrediction } from "@/lib/care-prediction";
 
@@ -339,6 +340,9 @@ export function SleepRecordForm({
 
           {message ? <div className="record-success">{message}</div> : null}
           {error ? <div className="record-error">{error}</div> : null}
+        </div>
+        <div className="record-save-bar flex justify-center">
+          <ViewRecordsButton type="sleep" />
         </div>
       </section>
     </main>

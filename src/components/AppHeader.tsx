@@ -19,7 +19,8 @@ export function AppHeader() {
     "/care/diaper",
     "/care/temperature",
     "/care/weight",
-    "/care/sleep"
+    "/care/sleep",
+    "/care/health"
   ].some((path) => pathname === path || pathname.startsWith(`${path}/`));
 
   return (

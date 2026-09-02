@@ -20,6 +20,9 @@ export interface CarePrediction {
     maxMl: number;
     targetMl: number;
     nextAt: string | null;
+    windowStartAt: string | null;
+    windowEndAt: string | null;
+    conflictsWithSleep: boolean;
     intervalMinutes: number;
     confidence: "low" | "medium" | "high";
     reason: string;
@@ -27,6 +30,8 @@ export interface CarePrediction {
   sleep: {
     nextAt: string | null;
     predictedStartAt: string | null;
+    startWindowStartAt: string | null;
+    startWindowEndAt: string | null;
     predictedEndAt: string | null;
     wakeWindowMinutes: number;
     expectedNapMinutes: number;
@@ -69,10 +74,20 @@ export async function getCarePrediction(
       breastfeedingStartedAt: openBreastfeeding?.startedAt ?? null
     };
 
+    const sleepPrediction = predictSleep(ageBase, sleeps, feedings, status);
+    const feedingPrediction = predictFeeding(
+      ageBase,
+      feedings,
+      sleeps,
+      status,
+      sleepPrediction,
+      now
+    );
+
     return {
       status,
-      feeding: predictFeeding(ageBase, feedings, sleeps, status, now),
-      sleep: predictSleep(ageBase, sleeps, feedings, status),
+      feeding: feedingPrediction,
+      sleep: sleepPrediction,
       diaper: predictDiaper(ageBase, diapers, now)
     };
   } catch {
@@ -87,6 +102,9 @@ export async function getCarePrediction(
       feeding: {
         ...ageBase.feeding,
         nextAt: null,
+        windowStartAt: null,
+        windowEndAt: null,
+        conflictsWithSleep: false,
         confidence: "low",
         reason: "暂时无法读取历史记录，先按当前日龄估算。"
       },
@@ -94,6 +112,8 @@ export async function getCarePrediction(
         ...ageBase.sleep,
         nextAt: null,
         predictedStartAt: null,
+        startWindowStartAt: null,
+        startWindowEndAt: null,
         predictedEndAt: null,
         confidence: "low",
         reason: "暂时无法读取历史记录，先按当前日龄估算。"
@@ -114,6 +134,7 @@ function predictFeeding(
   feedings: Awaited<ReturnType<typeof getRecentFeedingHistory>>,
   sleeps: Awaited<ReturnType<typeof getSleepTimeline>>,
   status: CarePrediction["status"],
+  sleepPrediction: CarePrediction["sleep"],
   now: Date
 ): CarePrediction["feeding"] {
   const completed = feedings
@@ -155,15 +176,22 @@ function predictFeeding(
     )
   );
   const latestAt = completed.at(-1)?.happenedAt ?? null;
-  const expectedSleepEndAt =
-    status.isSleeping && status.sleepStartedAt
-      ? addMinutes(status.sleepStartedAt, ageBase.sleep.expectedNapMinutes)
-      : null;
   const rawNextAt = latestAt ? addMinutes(latestAt, intervalMinutes) : null;
-  const nextAt =
-    status.isSleeping && expectedSleepEndAt
-      ? expectedSleepEndAt
-      : avoidSleepingWindow(rawNextAt, sleeps);
+  const nextAt = avoidSleepingWindow(rawNextAt, sleeps);
+  const intervalSpread = predictionSpread(
+    intervalSamples,
+    intervalSamples.length >= 5 ? 20 : 40,
+    15,
+    75
+  );
+  const windowStartAt = nextAt ? addMinutes(nextAt, -intervalSpread) : null;
+  const windowEndAt = nextAt ? addMinutes(nextAt, intervalSpread) : null;
+  const conflictsWithSleep = rangesOverlap(
+    windowStartAt,
+    windowEndAt,
+    sleepPrediction.startWindowStartAt ?? sleepPrediction.predictedStartAt,
+    sleepPrediction.predictedEndAt
+  );
 
   return {
     minMl: Math.max(ageBase.feeding.minMl, targetMl - 10),
@@ -171,6 +199,9 @@ function predictFeeding(
     targetMl,
     intervalMinutes,
     nextAt,
+    windowStartAt,
+    windowEndAt,
+    conflictsWithSleep,
     confidence:
       amountSamples.length >= 6 && intervalSamples.length >= 4
         ? "high"
@@ -179,7 +210,9 @@ function predictFeeding(
           : "low",
     reason:
       amountSamples.length >= 3 || intervalSamples.length >= 3
-        ? status.isSleeping
+        ? conflictsWithSleep
+          ? "喂养预测区间与睡眠区间重叠，请结合饥饿信号和医生建议判断，不自动修改时间。"
+          : status.isSleeping
           ? "宝宝正在睡眠，喂养提醒已顺延到预计醒来后。"
           : `结合日龄和最近 ${Math.max(amountSamples.length, intervalSamples.length)} 条喂养记录动态估算。`
         : "记录还不多，先按当前日龄估算；多记录几次后会自动贴近宝宝习惯。"
@@ -215,10 +248,6 @@ function predictSleep(
     )
     .slice(-8);
   const latestSleepEnd = endedSleeps.at(-1)?.endedAt ?? null;
-  const latestFeeding = feedings
-    .map((item) => item.happenedAt)
-    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
-    .at(-1);
   const historyWakeWindow =
     wakeWindows.length >= 2 ? median(trimOutliers(wakeWindows)) : null;
   const wakeWindowMinutes = Math.round(
@@ -240,7 +269,13 @@ function predictSleep(
       ageBase.sleep.maxNapMinutes
     )
   );
-  const anchors = [latestSleepEnd, latestFeeding]
+  // Wake windows start when the previous sleep ends. A feeding during the
+  // wake window must not restart the wake-window clock.
+  const fallbackFeeding = feedings
+    .map((item) => item.happenedAt)
+    .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    .at(-1);
+  const anchors = [latestSleepEnd ?? fallbackFeeding]
     .filter(Boolean)
     .map((value) => new Date(value as string).getTime())
     .filter(Number.isFinite);
@@ -253,6 +288,18 @@ function predictSleep(
             Math.max(...anchors) + wakeWindowMinutes * 60000
           ).toISOString()
         : null;
+  const wakeSpread = predictionSpread(
+    wakeWindows,
+    wakeWindows.length >= 5 ? 20 : 40,
+    15,
+    90
+  );
+  const startWindowStartAt = predictedStartAt
+    ? addMinutes(predictedStartAt, -wakeSpread)
+    : null;
+  const startWindowEndAt = predictedStartAt
+    ? addMinutes(predictedStartAt, wakeSpread)
+    : null;
   const predictedEndAt =
     status.sleepStartedAt && (status.isSleeping || status.sleepPaused)
       ? addMinutes(status.sleepStartedAt, expectedNapMinutes)
@@ -263,6 +310,8 @@ function predictSleep(
   return {
     nextAt: predictedStartAt,
     predictedStartAt,
+    startWindowStartAt,
+    startWindowEndAt,
     predictedEndAt,
     wakeWindowMinutes,
     expectedNapMinutes,
@@ -624,8 +673,37 @@ function median(values: number[]) {
 
 function trimOutliers(values: number[]) {
   if (values.length < 5) return values;
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted.slice(1, -1);
+  const center = median(values);
+  const mad = median(values.map((value) => Math.abs(value - center)));
+  if (mad === 0) return values.filter((value) => value === center);
+  const limit = 3.5 * 1.4826 * mad;
+  return values.filter((value) => Math.abs(value - center) <= limit);
+}
+
+function predictionSpread(
+  values: number[],
+  fallback: number,
+  minimum: number,
+  maximum: number
+) {
+  const cleaned = trimOutliers(values);
+  if (cleaned.length < 3) return fallback;
+  const center = median(cleaned);
+  const deviations = cleaned.map((value) => Math.abs(value - center));
+  return Math.round(clamp(median(deviations) * 1.4826, minimum, maximum));
+}
+
+function rangesOverlap(
+  startA: string | null,
+  endA: string | null,
+  startB: string | null,
+  endB: string | null
+) {
+  if (!startA || !endA || !startB || !endB) return false;
+  return (
+    new Date(startA).getTime() <= new Date(endB).getTime() &&
+    new Date(startB).getTime() <= new Date(endA).getTime()
+  );
 }
 
 function roundToStep(value: number, step: number) {

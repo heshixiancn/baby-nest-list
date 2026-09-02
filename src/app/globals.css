@@ -292,7 +292,7 @@ textarea {
   }
 
   .record-page-shell {
-    @apply mx-auto flex min-h-screen w-full max-w-md flex-col px-3 pb-20 pt-6;
+    @apply mx-auto flex w-full max-w-md flex-col px-3 pb-20 pt-6;
   }
 
   .record-page-shell-compact {

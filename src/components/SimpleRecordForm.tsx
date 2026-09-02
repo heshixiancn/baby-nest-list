@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { currentDatetimeLocalValue } from "@/lib/time-input";
 import { RecordTimePicker } from "@/components/RecordTimePicker";
 import { ValueWheel } from "@/components/ValueWheel";
+import { ViewRecordsButton } from "@/components/ViewRecordsButton";
 
 interface SimpleRecordFormProps {
   title: string;
@@ -18,6 +19,7 @@ interface SimpleRecordFormProps {
   quickValues: number[];
   referenceHint?: string;
   warningKind?: "temperature";
+  recordType: string;
   extraField?: {
     name: string;
     label: string;
@@ -36,6 +38,7 @@ export function SimpleRecordForm({
   quickValues,
   referenceHint,
   warningKind,
+  recordType,
   extraField
 }: SimpleRecordFormProps) {
   const [recordedAt, setRecordedAt] = useState(currentDatetimeLocalValue);
@@ -179,9 +182,10 @@ export function SimpleRecordForm({
           {error ? <div className="record-error">{error}</div> : null}
         </div>
 
-        <div className="record-save-bar">
+        <div className="record-save-bar flex gap-3">
+          <ViewRecordsButton type={recordType} />
           <button
-            className="record-primary-button mx-auto flex w-full max-w-md"
+            className="record-primary-button flex h-12 w-[48%]"
             type="button"
             onClick={handleSave}
             disabled={saving}

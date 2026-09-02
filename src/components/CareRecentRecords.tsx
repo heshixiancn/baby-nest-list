@@ -20,8 +20,10 @@ const typeLabels: Record<string, string> = {
 
 export function CareRecentRecords({ records }: { records: CareRecord[] }) {
   const [items, setItems] = useState(records);
+  const [showAll, setShowAll] = useState(false);
   const [deletingId, setDeletingId] = useState("");
   const [error, setError] = useState("");
+  const singleType = new Set(items.map((item) => item.type)).size === 1;
 
   async function handleDelete(record: CareRecord) {
     if (!window.confirm(`删除这条${typeLabels[record.type] ?? "记录"}？`))
@@ -50,8 +52,7 @@ export function CareRecentRecords({ records }: { records: CareRecord[] }) {
     <section className="rounded-[2rem] border border-white/80 bg-white/60 p-5 shadow-xl shadow-slate-200/40 backdrop-blur-2xl">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-slate-500">最近记录</p>
-          <h2 className="apple-hello-text mt-1 text-3xl">明细与纠错</h2>
+          <p className="apple-hello-text text-2xl">今日记录</p>
         </div>
         <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-white/70">
           {items.length} 条
@@ -63,15 +64,13 @@ export function CareRecentRecords({ records }: { records: CareRecord[] }) {
       <div className="mt-4 overflow-hidden rounded-[1.5rem] ring-1 ring-white/70">
         {items.length > 0 ? (
           <div className="divide-y divide-white/70">
-            {items.slice(0, 30).map((record) => (
+            {items.filter((record) => showAll || isToday(record.happenedAt)).slice(0, 30).map((record) => (
               <div
                 key={`${record.type}-${record.id}`}
                 className="grid grid-cols-[7rem_1fr_auto] items-center gap-4 bg-white/45 px-4 py-3 text-sm"
               >
                 <div>
-                  <p className="font-medium text-slate-600">
-                    {typeLabels[record.type] ?? record.type}
-                  </p>
+                  {!singleType ? <p className="font-medium text-slate-600">{typeLabels[record.type] ?? record.type}</p> : null}
                   <p className="text-xs text-slate-400">
                     {formatDateTime(record.happenedAt)}
                   </p>
@@ -103,8 +102,19 @@ export function CareRecentRecords({ records }: { records: CareRecord[] }) {
           </div>
         )}
       </div>
+      {items.some((record) => !isToday(record.happenedAt)) ? (
+        <button type="button" onClick={() => setShowAll((value) => !value)} className="record-soft-button mt-3 w-full rounded-full px-4 py-2 text-sm font-medium">
+          {showAll ? "收起历史记录" : "查看更多历史记录"}
+        </button>
+      ) : null}
     </section>
   );
+}
+
+function isToday(iso: string) {
+  const value = new Date(iso).toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" });
+  const today = new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" });
+  return value === today;
 }
 
 function formatDateTime(iso: string) {

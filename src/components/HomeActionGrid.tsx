@@ -40,6 +40,7 @@ export function HomeActionGrid({
             href={action.href}
             className={`voice-orb group relative mx-auto flex h-[7.7rem] w-[7.7rem] items-center justify-center rounded-full transition duration-200 active:scale-95 sm:h-32 sm:w-32 ${action.tone} ${action.motion}`}
             style={{ animationDelay: action.delay }}
+            aria-label={action.label}
           >
             <span className="voice-orb-clip absolute inset-0 rounded-full">
               <span className="voice-orb-cloud absolute inset-[-10%] rounded-full" />
@@ -47,24 +48,23 @@ export function HomeActionGrid({
               <span className="voice-orb-mist absolute inset-[4%] rounded-full" />
               <span className="voice-orb-glass absolute inset-[3px] rounded-full" />
             </span>
-            <span className="relative z-10 flex h-full w-full flex-col items-center justify-center rounded-full px-2 text-center text-slate-950">
+            <span className="relative z-10 flex h-full w-full -translate-y-1 flex-col items-center justify-center rounded-full px-1 text-center text-slate-950">
               <span
-                className="text-[1.35rem] drop-shadow-sm"
+                className="text-[2.5rem] drop-shadow-sm"
                 aria-hidden="true"
               >
                 {action.icon}
               </span>
-              <span className="apple-hello-text mt-0.5 text-[1.16rem]">
-                {action.label}
-              </span>
               <span
-                className={`home-countdown-timer mt-1.5 ${
+                className={`home-countdown-timer mt-1 max-w-[88%] ${
                   hint.active ? "home-countdown-active" : ""
                 }`}
               >
-                <span className="text-[0.58rem] leading-none text-slate-500">
-                  {hint.label.split(" · ")[0]}
-                </span>
+                {hint.label !== "状态" ? (
+                  <span className="text-[0.58rem] leading-none text-slate-500">
+                    {hint.label.split(" · ")[0]}
+                  </span>
+                ) : null}
                 <span className="apple-hello-text mt-0.5 text-[1.05rem] tabular-nums leading-none">
                   {hint.label.includes(" · ") ? hint.label.split(" · ")[1] : hint.value}
                 </span>
@@ -109,8 +109,10 @@ function getHint(
     }
 
     if (countdown.sleepStartedAt) {
-      const elapsed = formatElapsed("已睡", countdown.sleepStartedAt, now);
-      return { ...elapsed, label: countdown.sleepExpectedEndAt ? `已睡 · ${formatClock(countdown.sleepExpectedEndAt)}` : elapsed.label };
+      if (countdown.sleepExpectedEndAt) {
+        return formatCountdown("预计醒来", countdown.sleepExpectedEndAt, now);
+      }
+      return formatElapsed("已睡", countdown.sleepStartedAt, now);
     }
 
     return countdown.sleepNextAt
@@ -135,29 +137,29 @@ function getHint(
 
   if (hint === "temperature") {
     if (countdown.temperatureMeasuredToday) {
-      return { label: "体温", value: "今日已测", active: false };
+      return { label: "状态", value: "今日已测", active: false };
     }
 
-    return { label: "体温", value: "今日未测", active: false };
+    return { label: "状态", value: "今日未测", active: false };
   }
 
   if (countdown.weightMeasuredToday) {
-    return { label: "体重", value: "今日已测", active: false };
+    return { label: "状态", value: "今日已测", active: false };
   }
 
   return countdown.weightLastAt
     ? now
       ? {
-          label: "体重",
+          label: "状态",
           value: `未测 ${formatAgo(countdown.weightLastAt, now)}`,
           active: false
         }
       : {
-          label: "体重",
+          label: "状态",
           value: "今日未测",
           active: false
         }
-    : { label: "体重", value: "今日未测", active: false };
+    : { label: "状态", value: "今日未测", active: false };
 }
 
 function formatClock(iso: string) {

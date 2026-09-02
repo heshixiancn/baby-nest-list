@@ -728,7 +728,7 @@ export async function getCareTrends(limit = 20) {
   }
 
   try {
-    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 60);
+    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 1000);
     const [feedingRows] = await getPool().query<CareTrendRow[]>(
       `select happened_at, amount_ml
          from feeding_records

@@ -1,5 +1,6 @@
 import { CareTrendsDashboard } from "@/components/CareTrendsDashboard";
 import { CareRecentRecords } from "@/components/CareRecentRecords";
+import { SleepChart } from "@/components/SleepChart";
 import {
   getCareTrends,
   getRecentCareRecords,
@@ -8,28 +9,28 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export default async function HealthPage() {
+export default async function HealthPage({ searchParams }: { searchParams: { type?: string } }) {
   const [trends, sleepTimeline, recentRecords] = await Promise.all([
     getCareTrends(),
-    getSleepTimeline(),
+    getSleepTimeline(500),
     getRecentCareRecords()
   ]);
+  const filteredRecords = searchParams.type ? recentRecords.filter((record) => record.type === searchParams.type) : recentRecords;
+  const todayRecords = filteredRecords.filter((record) => new Date(record.happenedAt).toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }) === new Date().toLocaleDateString("zh-CN", { timeZone: "Asia/Shanghai" }));
+  const diaperPee = todayRecords.filter((record) => record.type === "diaper" && (record.title.includes("尿") || record.title.includes("尿布"))).length;
+  const diaperPoop = todayRecords.filter((record) => record.type === "diaper" && record.title.includes("便")).length;
   return (
     <>
       <div className="hidden space-y-5 md:block">
         <CareTrendsDashboard trends={trends} sleepTimeline={sleepTimeline} />
-        <CareRecentRecords records={recentRecords} />
+        <CareRecentRecords records={filteredRecords} />
       </div>
       <main className="page-shell md:hidden">
-        <section className="rounded-[2rem] border border-white/80 bg-white/60 p-5 text-center shadow-xl shadow-slate-200/40 backdrop-blur-2xl">
-          <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
-            Analytics
-          </p>
-          <h1 className="apple-hello-text mt-2 text-3xl">成长分析</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-500">
-            报表和趋势分析更适合在电脑端查看。手机端先专注快速记录，数据记好后，电脑端会自动汇总成图表。
-          </p>
-        </section>
+        <div className="mt-4">
+          {searchParams.type === "sleep" ? <SleepChart items={sleepTimeline} /> : null}
+          {searchParams.type === "diaper" ? <div className="mb-3 rounded-2xl bg-white/60 px-4 py-3 text-center text-sm text-slate-600">今日排尿 {diaperPee} 次 · 排便 {diaperPoop} 次</div> : null}
+          <CareRecentRecords records={filteredRecords} />
+        </div>
       </main>
     </>
   );
