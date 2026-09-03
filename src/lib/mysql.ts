@@ -703,7 +703,7 @@ export async function getRecentBottleFeedingAmounts(limit = 6) {
 
 export async function getRecentFeedingHistory(limit = 24) {
   if (!hasCompleteMysqlConfig()) return [];
-  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 80);
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 1000);
   const [rows] = await getPool().query<FeedingHistoryRow[]>(
     `select happened_at, ended_at, feeding_type, amount_ml, duration_minutes
      from feeding_records
@@ -945,7 +945,7 @@ export async function getTodayDiaperSummary() {
 
 export async function getRecentDiaperHistory(limit = 40) {
   if (!hasCompleteMysqlConfig()) return [];
-  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 100);
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 1000);
   const [rows] = await getPool().query<DiaperHistoryRow[]>(
     `select happened_at, diaper_type
      from diaper_records

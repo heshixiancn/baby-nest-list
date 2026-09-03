@@ -81,12 +81,23 @@ export default async function HomePage() {
       </div>
 
       <div className="flex flex-col pt-4 md:hidden">
-        <section className="relative mx-auto mb-4 flex w-full max-w-[23rem] items-center justify-center overflow-hidden rounded-[1.75rem] border border-white/80 bg-white/50 px-3 py-3 text-center shadow-2xl shadow-slate-200/40 backdrop-blur-2xl">
-          <div className="absolute inset-x-10 top-1/2 h-14 -translate-y-1/2 rounded-full bg-gradient-to-r from-cyan-200/30 via-indigo-200/35 to-pink-200/30 blur-xl" />
-          <p className="relative whitespace-nowrap rounded-[1.15rem] border border-white/80 bg-white/40 px-5 py-3 font-mono text-[clamp(1.25rem,6.5vw,1.75rem)] font-medium tracking-[0.035em] text-slate-600 shadow-inner shadow-white/80 ring-1 ring-indigo-100/60 tabular-nums">
-            <span className="mr-2 text-[0.62rem] font-semibold tracking-[0.22em] text-slate-400">BORN</span>
-            {babyReference.ageLabel.replace(/^出生\s*/, "")}
-          </p>
+        <section className="relative mx-auto mb-4 flex w-[86%] max-w-[20.5rem] items-stretch overflow-hidden rounded-[1.65rem] border border-white/80 bg-white/50 p-2.5 text-center shadow-2xl shadow-slate-200/40 backdrop-blur-2xl">
+          <div className="absolute inset-6 rounded-full bg-gradient-to-r from-cyan-200/25 via-indigo-200/30 to-pink-200/25 blur-xl" />
+          <div className="relative flex w-full items-stretch gap-2">
+            <div className="flex w-10 shrink-0 items-center justify-center border-r border-white/80 pr-2">
+              <span className="flex flex-col items-center gap-1 font-mono text-[0.68rem] font-semibold leading-none text-slate-400" aria-label="BORN">
+                {["B", "O", "R", "N"].map((letter) => <span key={letter} aria-hidden="true">{letter}</span>)}
+              </span>
+            </div>
+            <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+              {ageParts.map((part, index) => (
+                <div key={`${part.unit}-mobile-${index}`} className="flex min-h-[5.5rem] min-w-0 flex-col items-center justify-center rounded-[1.3rem] border border-white/90 bg-white/40 px-2 py-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.95),0_8px_20px_rgba(148,163,184,0.1)] ring-1 ring-indigo-100/50 backdrop-blur-2xl">
+                  <span className="font-mono text-[1.8rem] font-medium leading-none tracking-[-0.06em] text-slate-600 tabular-nums">{part.value}</span>
+                  <span className="mt-2 text-[0.68rem] font-medium tracking-[0.14em] text-slate-400">{part.unit}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
 
         <HomeActionGrid actions={recordActions} countdown={countdown} />

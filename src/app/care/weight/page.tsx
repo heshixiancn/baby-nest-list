@@ -1,6 +1,11 @@
 import { SimpleRecordForm } from "@/components/SimpleRecordForm";
+import { getCareTrends } from "@/lib/mysql";
 
-export default function WeightPage() {
+export const dynamic = "force-dynamic";
+
+export default async function WeightPage() {
+  const trends = await getCareTrends(1);
+  const latestWeight = trends.weight.at(-1)?.value ?? 3500;
   return (
     <><SimpleRecordForm
       title="体重"
@@ -9,7 +14,7 @@ export default function WeightPage() {
       valueField="weightGrams"
       valueLabel="体重"
       unit="g"
-      defaultValue={3500}
+      defaultValue={Math.round(latestWeight / 10) * 10}
       step={10}
       min={300}
       quickValues={[3000, 3200, 3500, 3800, 4000, 4500]}

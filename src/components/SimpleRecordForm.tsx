@@ -137,12 +137,16 @@ export function SimpleRecordForm({
                 {valueWarning || referenceHint}
               </div>
             ) : null}
-            <ValueWheel
-              value={value}
-              values={wheelValues}
-              unit={unit}
-              onChange={setValue}
-            />
+            {recordType === "weight" ? (
+              <WeightSelector value={value} onChange={setValue} />
+            ) : (
+              <ValueWheel
+                value={value}
+                values={wheelValues}
+                unit={unit}
+                onChange={setValue}
+              />
+            )}
           </div>
 
           {extraField ? (
@@ -195,6 +199,27 @@ export function SimpleRecordForm({
         </div>
       </section>
     </main>
+  );
+}
+
+function WeightSelector({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const kilograms = Math.floor(value / 1000);
+  const grams = Math.round((value % 1000) / 10) * 10;
+  return (
+    <div className="grid grid-cols-2 gap-2 rounded-[1.5rem] bg-white/35 p-2 ring-1 ring-white/60">
+      <label className="relative flex h-20 items-center justify-center rounded-[1.2rem] bg-white/55 ring-1 ring-white/80">
+        <select className="h-full w-full appearance-none bg-transparent px-4 text-center font-mono text-2xl font-medium text-slate-600 outline-none tabular-nums" value={kilograms} onChange={(event) => onChange(Number(event.target.value) * 1000 + grams)} aria-label="千克">
+          {Array.from({ length: 31 }, (_, number) => <option key={number} value={number}>{number} 千克</option>)}
+        </select>
+        <span className="pointer-events-none absolute bottom-1.5 text-[10px] text-slate-400">选择千克</span>
+      </label>
+      <label className="relative flex h-20 items-center justify-center rounded-[1.2rem] bg-gradient-to-r from-emerald-200/65 to-indigo-200/65 ring-1 ring-white/80">
+        <select className="h-full w-full appearance-none bg-transparent px-4 text-center font-mono text-2xl font-medium text-slate-700 outline-none tabular-nums" value={grams} onChange={(event) => onChange(kilograms * 1000 + Number(event.target.value))} aria-label="克">
+          {Array.from({ length: 100 }, (_, index) => index * 10).map((number) => <option key={number} value={number}>{number} 克</option>)}
+        </select>
+        <span className="pointer-events-none absolute bottom-1.5 text-[10px] text-slate-500">10g 微调</span>
+      </label>
+    </div>
   );
 }
 
