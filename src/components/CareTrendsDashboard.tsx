@@ -1,3 +1,5 @@
+import { SleepChart } from "@/components/SleepChart";
+
 type TrendPoint = {
   time: string;
   value: number;
@@ -55,16 +57,29 @@ export function CareTrendsDashboard({
   sleepTimeline?: SleepTimelineItem[];
   compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <section className="grid min-h-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <section className="grid grid-cols-2 gap-3">
+          {cards.map((card) => (
+            <TrendCard key={card.key} title={card.title} unit={card.unit} tone={card.tone} points={trends[card.key]} compact />
+          ))}
+        </section>
+        <SleepChart items={sleepTimeline} />
+      </section>
+    );
+  }
+
   return (
-    <section className={compact ? "space-y-4" : "page-shell space-y-5"}>
-      {!compact ? (
+    <section className="page-shell space-y-5">
+      {(
         <section className="rounded-[2rem] border border-white/80 bg-white/60 p-5 shadow-2xl shadow-slate-200/50 backdrop-blur-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
             Trends
           </p>
           <h1 className="apple-hello-text mt-2 text-4xl">成长记录</h1>
         </section>
-      ) : null}
+      )}
 
       <AnalysisSummary trends={trends} />
 
@@ -80,7 +95,7 @@ export function CareTrendsDashboard({
         ))}
       </section>
 
-      <SleepTimelinePanel items={sleepTimeline} />
+      <SleepChart items={sleepTimeline} />
     </section>
   );
 }
@@ -192,12 +207,14 @@ function TrendCard({
   title,
   unit,
   tone,
-  points
+  points,
+  compact = false
 }: {
   title: string;
   unit: string;
   tone: string;
   points: TrendPoint[];
+  compact?: boolean;
 }) {
   const latest = points.at(-1);
   const previous = points.at(-2);
@@ -207,11 +224,11 @@ function TrendCard({
       : 0;
 
   return (
-    <article className="rounded-[2rem] border border-white/80 bg-white/60 p-5 shadow-xl shadow-slate-200/40 backdrop-blur-2xl">
+    <article className={`border border-white/80 bg-white/60 shadow-xl shadow-slate-200/40 backdrop-blur-2xl ${compact ? "rounded-[1.5rem] p-3" : "rounded-[2rem] p-5"}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-slate-500">{title}</p>
-          <p className="apple-hello-text mt-1 text-3xl">
+          <p className={`apple-hello-text mt-1 ${compact ? "text-2xl" : "text-3xl"}`}>
             {latest ? `${latest.value}${unit}` : "暂无"}
           </p>
         </div>
@@ -220,17 +237,17 @@ function TrendCard({
         </span>
       </div>
 
-      <div className="mt-5">
+      <div className={compact ? "mt-2" : "mt-5"}>
         {points.length >= 2 ? (
-          <Sparkline points={points} tone={tone} />
+          <Sparkline points={points} tone={tone} compact={compact} />
         ) : (
-          <div className="flex h-40 items-center justify-center rounded-[1.5rem] bg-slate-50/70 text-sm text-slate-400">
+          <div className={`flex items-center justify-center rounded-[1.5rem] bg-slate-50/70 text-sm text-slate-400 ${compact ? "h-16" : "h-40"}`}>
             记录几次后显示趋势
           </div>
         )}
       </div>
 
-      <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+      <div className={`${compact ? "mt-2" : "mt-4"} flex items-center justify-between text-xs text-slate-500`}>
         <span>{latest ? formatDateTime(latest.time) : "暂无记录"}</span>
         {points.length >= 2 ? (
           <span>
@@ -244,7 +261,7 @@ function TrendCard({
   );
 }
 
-function Sparkline({ points, tone }: { points: TrendPoint[]; tone: string }) {
+function Sparkline({ points, tone, compact = false }: { points: TrendPoint[]; tone: string; compact?: boolean }) {
   const width = 420;
   const height = 160;
   const padding = 18;
@@ -271,7 +288,7 @@ function Sparkline({ points, tone }: { points: TrendPoint[]; tone: string }) {
         className={`absolute inset-x-8 top-8 h-16 rounded-full bg-gradient-to-r ${tone} opacity-20 blur-2xl`}
       />
       <svg
-        className="relative h-40 w-full"
+        className={`relative w-full ${compact ? "h-16" : "h-40"}`}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label="趋势图"

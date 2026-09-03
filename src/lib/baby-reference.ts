@@ -76,14 +76,19 @@ function getAge(
 }
 
 function formatAgeLabel(ageDays: number, ageHours: number) {
-  if (ageDays < 7) {
+  if (ageDays < 30) {
     const hours = ageHours % 24;
     return `出生 ${ageDays} 天 ${hours} 小时`;
   }
-  if (ageDays < 30) return `第 ${ageDays + 1} 天`;
-  const months = Math.floor(ageDays / 30);
-  const days = ageDays % 30;
-  return days === 0 ? `${months} 个月` : `${months} 个月 ${days} 天`;
+  if (ageDays < 365) {
+    const months = Math.floor(ageDays / 30);
+    const days = ageDays % 30;
+    return days === 0 ? `${months} 个月` : `${months} 个月 ${days} 天`;
+  }
+  const years = Math.floor(ageDays / 365);
+  const remainingDays = ageDays - years * 365;
+  const months = Math.floor(remainingDays / 30);
+  return months === 0 ? `${years} 岁` : `${years} 岁 ${months} 个月`;
 }
 
 function getReferenceByAge(ageDays: number) {
