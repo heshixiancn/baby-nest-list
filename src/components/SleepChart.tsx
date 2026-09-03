@@ -10,8 +10,8 @@ const zone = "Asia/Shanghai";
 export function SleepChart({ items }: { items: Item[] }) {
   const [range, setRange] = useState<(typeof ranges)[number]>("日");
   const today = dateKey(new Date());
-  const completed = items.filter((item) => item.endedAt);
-  const segments = useMemo(() => splitIntoDaySegments(completed), [items]);
+  const completed = useMemo(() => items.filter((item) => item.endedAt), [items]);
+  const segments = useMemo(() => splitIntoDaySegments(completed), [completed]);
   const dayItems = segments.filter((item) => item.day === today);
   const todayMinutes = dayItems.reduce((sum, item) => sum + item.minutes, 0);
   const days = range === "周" ? 7 : range === "月" ? 30 : 365;
