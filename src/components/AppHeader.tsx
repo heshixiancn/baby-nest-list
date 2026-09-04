@@ -9,6 +9,7 @@ const navItems = [
   { href: "/care/feeding", label: "喂养尿布" },
   { href: "/care/health", label: "成长健康" },
   { href: "/care/tasks", label: "提醒待办" },
+  { href: "/care/medication", label: "用药管理" },
   { href: "/shopping-list", label: "采购清单" }
 ];
 
@@ -20,6 +21,7 @@ export function AppHeader() {
     "/care/temperature",
     "/care/weight",
     "/care/sleep",
+    "/care/medication",
     "/care/health"
   ].some((path) => pathname === path || pathname.startsWith(`${path}/`));
 

@@ -58,6 +58,15 @@ const recordActions = [
     tone: "siri-sleep",
     motion: "siri-motion-dream",
     delay: "480ms"
+  },
+  {
+    href: "/care/medication",
+    label: "用药",
+    icon: "💊",
+    hint: "medication",
+    tone: "siri-feeding",
+    motion: "siri-motion-gentle",
+    delay: "600ms"
   }
 ] as const;
 

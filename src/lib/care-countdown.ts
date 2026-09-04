@@ -3,7 +3,8 @@ import {
   getOpenSleepRecord,
   getLatestTemperatureRecordTime,
   getLatestWeightRecordTime,
-  getTodayDiaperSummary
+  getTodayDiaperSummary,
+  getMedicationHomeStatus
 } from "@/lib/mysql";
 import { getCarePrediction } from "@/lib/care-prediction";
 
@@ -20,19 +21,24 @@ export interface HomeCountdown {
   diaperPoopToday: number;
   diaperNextPeeAt: string | null;
   diaperNextPoopAt: string | null;
+  medicationNextAt: string | null;
+  medicationNextName: string | null;
+  medicationCompletedToday: number;
+  medicationTotalToday: number;
 }
 
 export async function getHomeCountdown(): Promise<HomeCountdown> {
   if (!hasCompleteMysqlConfig()) return emptyCountdown();
 
   try {
-    const [prediction, openSleep, temperatureAt, weightAt, diaper] =
+    const [prediction, openSleep, temperatureAt, weightAt, diaper, medication] =
       await Promise.all([
         getCarePrediction(),
         getOpenSleepRecord(),
         getLatestTemperatureRecordTime(),
         getLatestWeightRecordTime(),
-        getTodayDiaperSummary()
+        getTodayDiaperSummary(),
+        getMedicationHomeStatus()
       ]);
 
     return {
@@ -47,7 +53,11 @@ export async function getHomeCountdown(): Promise<HomeCountdown> {
       diaperPeeToday: diaper.pee,
       diaperPoopToday: diaper.poop,
       diaperNextPeeAt: prediction.diaper.nextPeeAt,
-      diaperNextPoopAt: prediction.diaper.nextPoopAt
+      diaperNextPoopAt: prediction.diaper.nextPoopAt,
+      medicationNextAt: medication.nextAt,
+      medicationNextName: medication.nextName,
+      medicationCompletedToday: medication.completed,
+      medicationTotalToday: medication.total
     };
   } catch {
     return emptyCountdown();
@@ -67,7 +77,11 @@ function emptyCountdown(): HomeCountdown {
     diaperPeeToday: 0,
     diaperPoopToday: 0,
     diaperNextPeeAt: null,
-    diaperNextPoopAt: null
+    diaperNextPoopAt: null,
+    medicationNextAt: null,
+    medicationNextName: null,
+    medicationCompletedToday: 0,
+    medicationTotalToday: 0
   };
 }
 

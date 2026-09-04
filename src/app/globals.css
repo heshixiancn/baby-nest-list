@@ -378,6 +378,10 @@ textarea {
     @apply h-[6.8rem] w-[6.8rem] shadow-2xl shadow-sky-200/45;
   }
 
+  .record-round-action-feeding {
+    @apply h-[6.8rem] w-[6.8rem] shadow-2xl shadow-sky-200/45;
+  }
+
   .record-round-action-stop {
     @apply bg-gradient-to-br from-pink-200/95 via-orange-200/95 to-violet-200/95 shadow-pink-200/35;
   }
@@ -988,6 +992,21 @@ textarea {
   body {
     padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
   }
+}
+
+.glass-input {
+  width: 100%;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.65);
+  padding: 0.75rem 0.9rem;
+  color: rgb(71 85 105);
+  outline: none;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9);
+}
+
+.glass-input:focus {
+  box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.25);
 }
 
 @media (prefers-reduced-motion: reduce) {

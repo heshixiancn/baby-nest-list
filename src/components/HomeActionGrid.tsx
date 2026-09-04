@@ -11,7 +11,7 @@ type Action = {
   tone: string;
   motion: string;
   delay: string;
-  hint: "feeding" | "diaper" | "temperature" | "weight" | "sleep";
+  hint: "feeding" | "diaper" | "temperature" | "weight" | "sleep" | "medication";
 };
 
 export function HomeActionGrid({
@@ -141,6 +141,14 @@ function getHint(
     }
 
     return { label: "状态", value: "今日未测", active: false };
+  }
+
+  if (hint === "medication") {
+    if (!countdown.medicationTotalToday) return { label: "用药", value: "添加计划", active: false };
+    if (!countdown.medicationNextAt) return { label: "用药", value: "今日完成", active: false };
+    return now
+      ? formatCountdown(countdown.medicationNextName || "下次用药", countdown.medicationNextAt, now)
+      : { label: countdown.medicationNextName || "下次用药", value: "计算中", active: false };
   }
 
   if (countdown.weightMeasuredToday) {

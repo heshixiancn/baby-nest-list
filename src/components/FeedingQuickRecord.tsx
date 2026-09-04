@@ -353,7 +353,7 @@ export function FeedingQuickRecord({
                   ) : null}
                   <div className="mt-3 flex justify-center">
                     <button
-                      className={`record-round-action ${
+                      className={`record-round-action record-round-action-feeding ${
                         openBreastfeeding ? "record-round-action-stop" : ""
                       }`}
                       type="button"
@@ -364,10 +364,10 @@ export function FeedingQuickRecord({
                       }
                       disabled={saving}
                     >
-                      <span className="text-xl" aria-hidden="true">
+                      <span className="text-2xl leading-none" aria-hidden="true">
                         {openBreastfeeding ? "✓" : "▶"}
                       </span>
-                      <span className="mt-1 text-xs">
+                      <span className="mt-1.5 text-sm">
                         {openBreastfeeding ? "结束" : "开始"}
                       </span>
                     </button>

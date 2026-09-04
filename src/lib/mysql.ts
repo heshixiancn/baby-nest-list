@@ -133,6 +133,54 @@ type CareRecordListRow = RowDataPacket & {
   detail: string | null;
 };
 
+type MedicationPlanRow = RowDataPacket & {
+  id: string;
+  name: string;
+  dosage: string;
+  administration_method: string;
+  start_date: Date | string;
+  end_date: Date | string | null;
+  reminder_times: string;
+  instructions: string | null;
+  active: number | boolean;
+};
+
+type MedicationRecordRow = RowDataPacket & {
+  id: string;
+  plan_id: string;
+  medication_name: string;
+  dosage: string;
+  administration_method: string;
+  scheduled_at: Date | string;
+  taken_at: Date | string | null;
+  status: string;
+  note: string | null;
+};
+
+export type MedicationPlan = {
+  id: string;
+  name: string;
+  dosage: string;
+  administrationMethod: string;
+  startDate: string;
+  endDate: string | null;
+  reminderTimes: string[];
+  instructions: string;
+  active: boolean;
+};
+
+export type MedicationRecord = {
+  id: string;
+  planId: string;
+  medicationName: string;
+  dosage: string;
+  administrationMethod: string;
+  scheduledAt: string;
+  takenAt: string | null;
+  status: "taken" | "skipped";
+  note: string;
+};
+
 function missingConfigResult<T>(): DatabaseFetchResult<T> {
   return {
     data: [],
@@ -1198,4 +1246,162 @@ export async function getLatestSleepRecord() {
     endedAt: toIsoString(row.ended_at) || null,
     durationMinutes: row.duration_minutes ?? null
   };
+}
+
+function parseReminderTimes(value: string | null | undefined) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => /^\d{2}:\d{2}$/.test(item))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getMedicationPlans(includeInactive = false): Promise<MedicationPlan[]> {
+  if (!hasCompleteMysqlConfig()) return [];
+  const [rows] = await getPool().query<MedicationPlanRow[]>(
+    `select id, name, dosage, administration_method, start_date, end_date,
+            reminder_times, instructions, active
+     from medication_plans
+     ${includeInactive ? "" : "where active = 1"}
+     order by active desc, created_at desc`
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    dosage: row.dosage,
+    administrationMethod: row.administration_method,
+    startDate: toDateString(row.start_date),
+    endDate: row.end_date ? toDateString(row.end_date) : null,
+    reminderTimes: parseReminderTimes(row.reminder_times),
+    instructions: row.instructions ?? "",
+    active: Boolean(row.active)
+  }));
+}
+
+export async function getMedicationRecords(limit = 60): Promise<MedicationRecord[]> {
+  if (!hasCompleteMysqlConfig()) return [];
+  const safeLimit = Math.max(1, Math.min(200, Math.trunc(limit)));
+  const [rows] = await getPool().query<MedicationRecordRow[]>(
+    `select id, plan_id, medication_name, dosage, administration_method,
+            scheduled_at, taken_at, status, note
+     from medication_records
+     order by scheduled_at desc
+     limit ${safeLimit}`
+  );
+  return rows.map((row) => ({
+    id: row.id,
+    planId: row.plan_id,
+    medicationName: row.medication_name,
+    dosage: row.dosage,
+    administrationMethod: row.administration_method,
+    scheduledAt: toIsoString(row.scheduled_at),
+    takenAt: row.taken_at ? toIsoString(row.taken_at) : null,
+    status: row.status === "skipped" ? "skipped" : "taken",
+    note: row.note ?? ""
+  }));
+}
+
+export async function createMedicationPlan(input: {
+  name: string;
+  dosage: string;
+  administrationMethod: string;
+  startDate: string;
+  endDate?: string | null;
+  reminderTimes: string[];
+  instructions?: string;
+}) {
+  const id = randomUUID();
+  await getPool().execute(
+    `insert into medication_plans
+      (id, name, dosage, administration_method, start_date, end_date,
+       reminder_times, instructions, active)
+     values
+      (:id, :name, :dosage, :administrationMethod, :startDate, :endDate,
+       :reminderTimes, :instructions, 1)`,
+    {
+      id,
+      name: input.name,
+      dosage: input.dosage,
+      administrationMethod: input.administrationMethod,
+      startDate: input.startDate,
+      endDate: input.endDate || null,
+      reminderTimes: JSON.stringify([...new Set(input.reminderTimes)].sort()),
+      instructions: input.instructions ?? ""
+    }
+  );
+  return id;
+}
+
+export async function createMedicationRecord(input: {
+  planId: string;
+  medicationName: string;
+  dosage: string;
+  administrationMethod: string;
+  scheduledAt: string;
+  status: "taken" | "skipped";
+  note?: string;
+}) {
+  const id = randomUUID();
+  await getPool().execute(
+    `insert into medication_records
+      (id, plan_id, medication_name, dosage, administration_method,
+       scheduled_at, taken_at, status, note)
+     values
+      (:id, :planId, :medicationName, :dosage, :administrationMethod,
+       :scheduledAt, :takenAt, :status, :note)
+     on duplicate key update
+       taken_at = values(taken_at), status = values(status), note = values(note)`,
+    {
+      id,
+      ...input,
+      scheduledAt: new Date(input.scheduledAt),
+      takenAt: input.status === "taken" ? new Date() : null,
+      note: input.note ?? ""
+    }
+  );
+  return id;
+}
+
+export async function setMedicationPlanActive(id: string, active: boolean) {
+  await getPool().execute(
+    "update medication_plans set active = :active where id = :id",
+    { id, active: active ? 1 : 0 }
+  );
+}
+
+export async function getMedicationHomeStatus(now = new Date()) {
+  try {
+    const [plans, records] = await Promise.all([
+      getMedicationPlans(),
+      getMedicationRecords(100)
+    ]);
+    const dateKey = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(now);
+    const due = plans
+      .filter((plan) => plan.startDate <= dateKey && (!plan.endDate || plan.endDate >= dateKey))
+      .flatMap((plan) => plan.reminderTimes.map((time) => ({
+        planId: plan.id,
+        name: plan.name,
+        at: new Date(`${dateKey}T${time}:00+08:00`).toISOString()
+      })))
+      .sort((a, b) => a.at.localeCompare(b.at));
+    const resolvedKeys = new Set(records
+      .map((record) => `${record.planId}-${record.scheduledAt}`));
+    const takenKeys = new Set(records
+      .filter((record) => record.status === "taken")
+      .map((record) => `${record.planId}-${record.scheduledAt}`));
+    const pending = due.filter((item) => !resolvedKeys.has(`${item.planId}-${item.at}`));
+    const next = pending.find((item) => new Date(item.at).getTime() >= now.getTime()) ?? pending[0] ?? null;
+    const completed = due.filter((item) => takenKeys.has(`${item.planId}-${item.at}`)).length;
+    return { nextAt: next?.at ?? null, nextName: next?.name ?? null, completed, total: due.length };
+  } catch {
+    return { nextAt: null, nextName: null, completed: 0, total: 0 };
+  }
 }
