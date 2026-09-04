@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import {
   createMedicationPlan,
   createMedicationRecord,
-  setMedicationPlanActive
+  setMedicationPlanActive,
+  updateMedicationPlan
 } from "@/lib/mysql";
 
 const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
@@ -11,7 +12,7 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
 
-    if (body.action === "createPlan") {
+    if (body.action === "createPlan" || body.action === "updatePlan") {
       const name = String(body.name ?? "").trim();
       const dosage = String(body.dosage ?? "").trim();
       const administrationMethod = String(body.administrationMethod ?? "").trim();
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
       if (endDate && endDate < startDate) {
         return NextResponse.json({ error: "结束日期不能早于开始日期。" }, { status: 400 });
       }
-      const id = await createMedicationPlan({
+      const planInput = {
         name,
         dosage,
         administrationMethod,
@@ -37,7 +38,14 @@ export async function POST(request: Request) {
         endDate: endDate || null,
         reminderTimes,
         instructions: String(body.instructions ?? "").trim()
-      });
+      };
+      let id = body.action === "updatePlan" ? String(body.id ?? "") : "";
+      if (body.action === "updatePlan") {
+        if (!id) return NextResponse.json({ error: "缺少计划编号。" }, { status: 400 });
+        await updateMedicationPlan({ id, ...planInput });
+      } else {
+        id = await createMedicationPlan(planInput);
+      }
       return NextResponse.json({ ok: true, id });
     }
 

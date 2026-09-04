@@ -1338,6 +1338,35 @@ export async function createMedicationPlan(input: {
   return id;
 }
 
+export async function updateMedicationPlan(input: {
+  id: string;
+  name: string;
+  dosage: string;
+  administrationMethod: string;
+  startDate: string;
+  endDate?: string | null;
+  reminderTimes: string[];
+  instructions?: string;
+}) {
+  await getPool().execute(
+    `update medication_plans
+     set name = :name,
+         dosage = :dosage,
+         administration_method = :administrationMethod,
+         start_date = :startDate,
+         end_date = :endDate,
+         reminder_times = :reminderTimes,
+         instructions = :instructions
+     where id = :id`,
+    {
+      ...input,
+      endDate: input.endDate || null,
+      reminderTimes: JSON.stringify([...new Set(input.reminderTimes)].sort()),
+      instructions: input.instructions ?? ""
+    }
+  );
+}
+
 export async function createMedicationRecord(input: {
   planId: string;
   medicationName: string;
