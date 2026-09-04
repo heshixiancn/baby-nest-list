@@ -140,7 +140,7 @@ type MedicationPlanRow = RowDataPacket & {
   administration_method: string;
   start_date: Date | string;
   end_date: Date | string | null;
-  reminder_times: string;
+  reminder_times: string | string[];
   instructions: string | null;
   active: number | boolean;
 };
@@ -1248,7 +1248,10 @@ export async function getLatestSleepRecord() {
   };
 }
 
-function parseReminderTimes(value: string | null | undefined) {
+function parseReminderTimes(value: string | string[] | null | undefined) {
+  if (Array.isArray(value)) {
+    return value.filter((item) => /^\d{2}:\d{2}$/.test(item));
+  }
   try {
     const parsed = JSON.parse(value || "[]");
     return Array.isArray(parsed)
