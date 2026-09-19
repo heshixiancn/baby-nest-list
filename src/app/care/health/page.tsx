@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 export default async function HealthPage({ searchParams }: { searchParams: { type?: string } }) {
   const [trends, sleepTimeline, feedingTimeline, diaperTimeline, recentRecords] = await Promise.all([
     getCareTrends(500),
-    getSleepTimeline(500),
+    getSleepTimeline(3000),
     getRecentFeedingHistory(1000),
     getRecentDiaperHistory(1000),
     getRecentCareRecords()

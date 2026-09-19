@@ -213,8 +213,8 @@ function predictFeeding(
         ? conflictsWithSleep
           ? "喂养预测区间与睡眠区间重叠，请结合饥饿信号和医生建议判断，不自动修改时间。"
           : status.isSleeping
-          ? "宝宝正在睡眠，喂养提醒已顺延到预计醒来后。"
-          : `结合日龄和最近 ${Math.max(amountSamples.length, intervalSamples.length)} 条喂养记录动态估算。`
+            ? "宝宝正在睡眠，喂养提醒已顺延到预计醒来后。"
+            : `结合日龄和最近 ${Math.max(amountSamples.length, intervalSamples.length)} 条喂养记录动态估算。`
         : "记录还不多，先按当前日龄估算；多记录几次后会自动贴近宝宝习惯。"
   };
 }
@@ -231,20 +231,27 @@ function predictSleep(
       (a, b) =>
         new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()
     );
-  const sleepDurations = endedSleeps
+  // 照护时补记的睡醒时间是家长确认过的估计值：可用于当前状态，
+  // 但不作为训练日常睡眠时长和醒窗的高可信样本。
+  const trainingSleeps = endedSleeps.filter((item) => !item.estimatedWake);
+  const sleepDurations = trainingSleeps
     .map((item) => item.durationMinutes ?? 0)
     .filter((value) => isReliableSleepDuration(value, ageBase))
     .slice(-10);
   const wakeWindows = endedSleeps
     .slice(0, -1)
     .map((item, index) => {
+      if (item.estimatedWake || endedSleeps[index + 1].estimatedWake)
+        return null;
       const endedAt = item.endedAt ? new Date(item.endedAt).getTime() : 0;
       const nextStart = new Date(endedSleeps[index + 1].startedAt).getTime();
       return Math.round((nextStart - endedAt) / 60000);
     })
     .filter(
-      (value) =>
-        value >= 15 && value <= ageBase.sleep.maxWakeWindowMinutes * 1.8
+      (value): value is number =>
+        value !== null &&
+        value >= 15 &&
+        value <= ageBase.sleep.maxWakeWindowMinutes * 1.8
     )
     .slice(-8);
   const latestSleepEnd = endedSleeps.at(-1)?.endedAt ?? null;

@@ -18,6 +18,7 @@ export function HealthMetricChart({
   mobile?: boolean;
 }) {
   const [range, setRange] = useState<Range>(mobile ? "周" : "日");
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const availableRanges = mobile ? ranges.filter((value) => value !== "日") : ranges;
   const config = kind === "temperature"
     ? { title: "体温趋势", unit: "℃", color: "#ff6b8a", fill: "#ffd8e1" }
@@ -28,6 +29,9 @@ export function HealthMetricChart({
   const low = values.length ? Math.min(...values) : null;
   const high = values.length ? Math.max(...values) : null;
   const latestIsAbnormal = kind === "temperature" && latest ? isAbnormalTemperature(latest.value) : false;
+  const weekDays = range === "周" ? Array.from({ length: 7 }, (_, index) => dateKey(new Date(Date.now() - (6 - index) * 86400000))) : [];
+  const activeDay = selectedDay && weekDays.includes(selectedDay) ? selectedDay : dateKey(new Date());
+  const dayPoints = visible.filter((point) => dateKey(new Date(point.time)) === activeDay);
 
   return (
     <section className="mb-4 rounded-[2rem] border border-white/80 bg-white/60 p-4 shadow-xl shadow-indigo-200/25 backdrop-blur-2xl md:p-5">
@@ -42,7 +46,7 @@ export function HealthMetricChart({
         </div>
         <div className="flex rounded-full bg-white/70 p-1 ring-1 ring-white/80">
           {availableRanges.map((value) => (
-            <button key={value} type="button" onClick={() => setRange(value)} className={`rounded-full px-3 py-1.5 text-xs transition ${range === value ? "bg-indigo-300/80 text-slate-700 shadow-sm" : "text-slate-500"}`}>{value}</button>
+            <button key={value} type="button" onClick={() => { setRange(value); setSelectedDay(null); }} className={`rounded-full px-3 py-1.5 text-xs transition ${range === value ? "bg-indigo-300/80 text-slate-700 shadow-sm" : "text-slate-500"}`}>{value}</button>
           ))}
         </div>
       </div>
@@ -50,6 +54,7 @@ export function HealthMetricChart({
       {visible.length ? (
         <>
           <MetricPlot points={visible} range={range} color={config.color} fill={config.fill} kind={kind} />
+          {range === "周" ? <div className="mt-3 rounded-2xl bg-white/50 p-3"><div className="grid grid-cols-7 gap-1">{weekDays.map((day) => { const count = visible.filter((point) => dateKey(new Date(point.time)) === day).length; return <button key={day} type="button" aria-pressed={activeDay === day} onClick={() => setSelectedDay(day)} className={`rounded-xl px-0.5 py-2 text-center text-[10px] sm:text-xs ${activeDay === day ? "bg-indigo-100 ring-1 ring-indigo-300" : "bg-white/60"}`}><span className="block font-semibold">{count ? `${count}次` : "—"}</span><span className="block text-slate-500">{day.slice(5).replace("-", "/")}</span></button>; })}</div><p className="mt-3 text-xs font-medium text-slate-600">{activeDay.slice(5).replace("-", "/")} · {dayPoints.length} 次测量</p>{dayPoints.length ? <div className="mt-2 flex flex-wrap gap-1.5">{dayPoints.map((point, index) => <span key={`${point.time}-${index}`} className={`rounded-full px-2 py-1 text-xs ${kind === "temperature" && isAbnormalTemperature(point.value) ? "bg-rose-100 text-rose-600" : "bg-indigo-50 text-slate-600"}`}>{formatDateTime(point.time).split(" ").at(-1)} · {formatValue(point.value, kind)}{config.unit}</span>)}</div> : <p className="mt-2 text-xs text-slate-400">当天无测量记录</p>}</div> : null}
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <div className="rounded-2xl bg-white/45 px-3 py-2 ring-1 ring-white/70"><span className="text-xs text-slate-400">范围下限</span><p className="mt-0.5 font-mono text-slate-600 tabular-nums">{formatValue(low!, kind)} {config.unit}</p></div>
             <div className="rounded-2xl bg-white/45 px-3 py-2 ring-1 ring-white/70"><span className="text-xs text-slate-400">范围上限</span><p className="mt-0.5 font-mono text-slate-600 tabular-nums">{formatValue(high!, kind)} {config.unit}</p></div>
@@ -115,6 +120,8 @@ function filterPoints(points: Point[], range: Range) {
   const days = range === "周" ? 7 : range === "月" ? 30 : 365;
   return points.filter((point) => { const time = new Date(point.time).getTime(); return Number.isFinite(time) && time >= now - days * 86400000 && time <= now + 60000; });
 }
+
+function dateKey(date: Date) { return new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date); }
 
 function formatValue(value: number, kind: "temperature" | "weight") { return kind === "temperature" ? value.toFixed(1) : Math.round(value).toString(); }
 function isAbnormalTemperature(value: number) { return value < 36 || value > 37.4; }

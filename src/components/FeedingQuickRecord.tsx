@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { currentDatetimeLocalValue } from "@/lib/time-input";
 import type { FeedingRecommendation } from "@/lib/feeding-recommendation";
 import { RecordTimePicker } from "@/components/RecordTimePicker";
@@ -23,6 +23,13 @@ type OpenBreastfeeding = {
   id: string;
   startedAt: string;
   side: string;
+};
+
+type PendingWake = {
+  sleepId: string;
+  sleepStartedAt: string;
+  careAt: string;
+  kind: RecordMode;
 };
 
 export function FeedingQuickRecord({
@@ -61,6 +68,9 @@ export function FeedingQuickRecord({
   } | null>(null);
   const [openBreastfeeding, setOpenBreastfeeding] =
     useState<OpenBreastfeeding | null>(null);
+  const [pendingWake, setPendingWake] = useState<PendingWake | null>(null);
+  const [wakeAt, setWakeAt] = useState("");
+  const pendingCareAction = useRef<null | (() => Promise<void>)>(null);
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -112,6 +122,85 @@ export function FeedingQuickRecord({
       throw new Error(payload.error || "读取母乳喂养状态失败。");
     setOpenBreastfeeding(payload.openBreastfeeding ?? null);
     return payload.openBreastfeeding ?? null;
+  }
+
+  async function checkSleepBeforeCare(
+    action: () => Promise<void>,
+    careAt: string,
+    kind: RecordMode
+  ) {
+    if (saving || pendingWake) return;
+    try {
+      const response = await fetch("/api/care/sleep", { cache: "no-store" });
+      if (response.ok) {
+        const payload = (await response.json()) as {
+          openSleep?: { id: string; startedAt: string } | null;
+        };
+        const sleep = payload.openSleep;
+        const careTime = new Date(careAt).getTime();
+        if (
+          sleep &&
+          Number.isFinite(careTime) &&
+          careTime > new Date(sleep.startedAt).getTime()
+        ) {
+          pendingCareAction.current = action;
+          setWakeAt(careAt);
+          setPendingWake({
+            sleepId: sleep.id,
+            sleepStartedAt: sleep.startedAt,
+            careAt,
+            kind
+          });
+          return;
+        }
+      }
+    } catch {
+      // 睡眠状态暂时无法读取时，仍允许完成当前照护记录。
+    }
+    await action();
+  }
+
+  async function continueCareAfterWake(choice: "wake" | "sleep") {
+    if (!pendingWake || saving) return;
+    const action = pendingCareAction.current;
+    if (!action) return;
+    if (choice === "wake") {
+      const wakeTime = new Date(wakeAt).getTime();
+      const startTime = new Date(pendingWake.sleepStartedAt).getTime();
+      const careTime = new Date(pendingWake.careAt).getTime();
+      if (
+        !Number.isFinite(wakeTime) ||
+        wakeTime <= startTime ||
+        wakeTime > careTime
+      ) {
+        setError("睡醒时间应晚于入睡、且不能晚于这次照护的记录时间。");
+        return;
+      }
+      setSaving(true);
+      setError("");
+      try {
+        const response = await fetch("/api/care/sleep", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "finish",
+            id: pendingWake.sleepId,
+            endedAt: wakeAt,
+            note: "照护记录时补记睡醒时间"
+          })
+        });
+        const payload = (await response.json()) as { error?: string };
+        if (!response.ok) throw new Error(payload.error || "补记睡醒失败。");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "补记睡醒失败。");
+        setSaving(false);
+        return;
+      }
+      setSaving(false);
+    }
+    pendingCareAction.current = null;
+    setPendingWake(null);
+    await action();
   }
 
   async function handleStartBreastfeeding() {
@@ -357,14 +446,25 @@ export function FeedingQuickRecord({
                         openBreastfeeding ? "record-round-action-stop" : ""
                       }`}
                       type="button"
-                      onClick={
-                        openBreastfeeding
-                          ? handleFinishBreastfeeding
-                          : handleStartBreastfeeding
+                      onClick={() =>
+                        void (openBreastfeeding
+                          ? checkSleepBeforeCare(
+                              handleFinishBreastfeeding,
+                              endedAt || currentDatetimeLocalValue(),
+                              "feeding"
+                            )
+                          : checkSleepBeforeCare(
+                              handleStartBreastfeeding,
+                              recordedAt || currentDatetimeLocalValue(),
+                              "feeding"
+                            ))
                       }
                       disabled={saving}
                     >
-                      <span className="text-2xl leading-none" aria-hidden="true">
+                      <span
+                        className="text-2xl leading-none"
+                        aria-hidden="true"
+                      >
                         {openBreastfeeding ? "✓" : "▶"}
                       </span>
                       <span className="mt-1.5 text-sm">
@@ -445,12 +545,24 @@ export function FeedingQuickRecord({
           <button
             className="record-primary-button flex h-12 w-[48%]"
             type="button"
-            onClick={
-              mode === "feeding" && feedingType === "母乳"
-                ? openBreastfeeding
-                  ? handleFinishBreastfeeding
-                  : handleStartBreastfeeding
-                : handleSave
+            onClick={() =>
+              void (mode === "feeding" && feedingType === "母乳"
+              ? openBreastfeeding
+                ? checkSleepBeforeCare(
+                    handleFinishBreastfeeding,
+                    endedAt || currentDatetimeLocalValue(),
+                    "feeding"
+                  )
+                  : checkSleepBeforeCare(
+                      handleStartBreastfeeding,
+                      recordedAt || currentDatetimeLocalValue(),
+                      "feeding"
+                    )
+                : checkSleepBeforeCare(
+                    handleSave,
+                    recordedAt || currentDatetimeLocalValue(),
+                    mode
+                  ))
             }
             disabled={saving}
           >
@@ -464,8 +576,88 @@ export function FeedingQuickRecord({
           </button>
         </div>
       </div>
+      {pendingWake ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/35 p-4 backdrop-blur-sm sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-label="确认是否已睡醒"
+        >
+          <div className="w-full max-w-md rounded-[1.8rem] border border-white/90 bg-white/95 p-5 shadow-2xl backdrop-blur-2xl">
+            <h2 className="apple-hello-text text-xl">孩子已经醒了吗？</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {pendingWake.kind === "feeding"
+                ? "这次喂养开始时仍在睡眠记录中。"
+                : "记录尿布时仍在睡眠记录中。"}
+              如果忘了结束睡眠，可以按本次记录时间补记。
+            </p>
+            <p className="mt-3 text-xs text-slate-400">
+              本次记录：{formatClock(pendingWake.careAt)}
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {[0, 5, 10, 15].map((minutes) => (
+                <button
+                  key={minutes}
+                  type="button"
+                  onClick={() =>
+                    setWakeAt(localMinutesBefore(pendingWake.careAt, minutes))
+                  }
+                  className={`rounded-2xl px-2 py-2.5 text-sm font-medium ${wakeAt === localMinutesBefore(pendingWake.careAt, minutes) ? "record-selected-button" : "record-soft-button"}`}
+                >
+                  {minutes === 0 ? "记录时醒" : `提前 ${minutes} 分钟`}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3">
+              <RecordTimePicker
+                label="睡醒时间"
+                value={wakeAt}
+                onChange={setWakeAt}
+              />
+            </div>
+            {error ? (
+              <p className="mt-2 text-xs text-rose-600">{error}</p>
+            ) : null}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void continueCareAfterWake("sleep")}
+                className="record-soft-button min-h-11 rounded-full px-2 text-sm"
+              >
+                仍在睡，照常记录
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => void continueCareAfterWake("wake")}
+                className="record-accent-button min-h-11 rounded-full px-2 text-sm font-medium"
+              >
+                补记睡醒并记录
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                pendingCareAction.current = null;
+                setPendingWake(null);
+                setError("");
+              }}
+              className="mt-3 w-full text-center text-xs text-slate-400"
+            >
+              取消本次操作
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
+}
+
+function localMinutesBefore(localValue: string, minutes: number) {
+  const date = new Date(new Date(localValue).getTime() - minutes * 60000);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
 }
 
 function SegmentButton({

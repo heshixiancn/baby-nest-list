@@ -22,6 +22,7 @@ export function SleepRecordForm({
   const [startedAt, setStartedAt] = useState(currentDatetimeLocalValue);
   const [endedAt, setEndedAt] = useState(currentDatetimeLocalValue);
   const [endedAtTouched, setEndedAtTouched] = useState(false);
+  const [showWakePicker, setShowWakePicker] = useState(false);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -71,13 +72,14 @@ export function SleepRecordForm({
     });
   }
 
-  async function handleFinish() {
+  async function handleFinish(wakeAt = endedAt) {
     if (!openSleep) return;
-    await saveSleep({
+    const saved = await saveSleep({
       action: "finish",
       id: openSleep.id,
-      endedAt: endedAt || currentDatetimeLocalValue()
+      endedAt: wakeAt || currentDatetimeLocalValue()
     });
+    if (saved) setShowWakePicker(false);
   }
 
   async function handlePause() {
@@ -120,7 +122,7 @@ export function SleepRecordForm({
       setError("");
       setMessage("刚刚已记录，已避免重复提交。");
       window.setTimeout(() => setMessage(""), 2000);
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -156,8 +158,10 @@ export function SleepRecordForm({
       setEndedAtTouched(false);
       await refreshOpenSleep();
       window.setTimeout(() => setMessage(""), 2400);
+      return true;
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "保存失败。");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -284,10 +288,20 @@ export function SleepRecordForm({
                 <button
                   className="record-accent-button relative z-10 mt-3 h-11 w-full rounded-full text-sm font-medium"
                   type="button"
-                  onClick={handleFinish}
+                  onClick={() => void handleFinish()}
                   disabled={saving}
                 >
                   确认醒了
+                </button>
+              ) : null}
+              {openSleep && !openSleep.pauseStartedAt ? (
+                <button
+                  className="record-accent-button relative z-10 mt-3 h-11 w-full rounded-full text-sm font-medium"
+                  type="button"
+                  onClick={() => setShowWakePicker(true)}
+                  disabled={saving}
+                >
+                  醒了 · 补记睡醒时间
                 </button>
               ) : null}
             </div>
@@ -341,12 +355,75 @@ export function SleepRecordForm({
           {message ? <div className="record-success">{message}</div> : null}
           {error ? <div className="record-error">{error}</div> : null}
         </div>
+        {showWakePicker && openSleep ? (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/35 p-4 backdrop-blur-sm sm:items-center"
+            role="dialog"
+            aria-modal="true"
+            aria-label="选择睡醒时间"
+          >
+            <div className="w-full max-w-md rounded-[1.8rem] border border-white/90 bg-white/90 p-5 shadow-2xl backdrop-blur-2xl">
+              <h2 className="apple-hello-text text-xl">什么时候醒的？</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                先照顾孩子，时间可以现在补记。
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {[0, 5, 10, 15].map((minutes) => (
+                  <button
+                    key={minutes}
+                    type="button"
+                    disabled={saving}
+                    onClick={() =>
+                      void handleFinish(localMinutesBefore(minutes))
+                    }
+                    className="rounded-2xl bg-gradient-to-r from-pink-100 to-indigo-100 px-2 py-3 text-sm font-medium text-slate-700 disabled:opacity-50"
+                  >
+                    {minutes === 0 ? "刚刚醒" : `${minutes} 分钟前`}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3">
+                <RecordTimePicker
+                  label="自选睡醒时间"
+                  value={endedAt}
+                  onChange={(value) => {
+                    setEndedAtTouched(true);
+                    setEndedAt(value);
+                  }}
+                />
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowWakePicker(false)}
+                  className="record-soft-button h-11 flex-1 rounded-full text-sm"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void handleFinish()}
+                  className="record-accent-button h-11 flex-1 rounded-full text-sm"
+                >
+                  按所选时间结束
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <div className="record-save-bar flex justify-center">
           <ViewRecordsButton type="sleep" />
         </div>
       </section>
     </main>
   );
+}
+
+function localMinutesBefore(minutes: number) {
+  const date = new Date(Date.now() - minutes * 60000);
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
 }
 
 function calculateDurationMinutes(startedAt: string, endedAt: string) {

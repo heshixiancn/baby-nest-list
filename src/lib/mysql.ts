@@ -113,6 +113,7 @@ type SleepTimelineRow = RowDataPacket & {
   duration_minutes: number | null;
   awake_minutes: number | null;
   pause_started_at: Date | string | null;
+  note: string | null;
 };
 
 type DiaperSummaryRow = RowDataPacket & {
@@ -238,9 +239,13 @@ function toNumber(value: string | number | null | undefined, fallback = 0) {
 function toIsoString(value: Date | string | null | undefined) {
   if (!value) return "";
   if (value instanceof Date) return value.toISOString();
-  const mysqlLocal = String(value).match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?/);
+  const mysqlLocal = String(value).match(
+    /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?/
+  );
   const date = mysqlLocal
-    ? new Date(`${mysqlLocal[1]}-${mysqlLocal[2]}-${mysqlLocal[3]}T${mysqlLocal[4]}:${mysqlLocal[5]}:${mysqlLocal[6] ?? "00"}.${(mysqlLocal[7] ?? "0").padEnd(3, "0")}+08:00`)
+    ? new Date(
+        `${mysqlLocal[1]}-${mysqlLocal[2]}-${mysqlLocal[3]}T${mysqlLocal[4]}:${mysqlLocal[5]}:${mysqlLocal[6] ?? "00"}.${(mysqlLocal[7] ?? "0").padEnd(3, "0")}+08:00`
+      )
     : new Date(value);
   return Number.isNaN(date.getTime()) ? String(value) : date.toISOString();
 }
@@ -851,9 +856,9 @@ function emptyCareTrends() {
 export async function getSleepTimeline(limit = 20) {
   if (!hasCompleteMysqlConfig()) return [];
   try {
-    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 60);
+    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 3000);
     const [rows] = await getPool().query<SleepTimelineRow[]>(
-      `select id, started_at, ended_at, duration_minutes, awake_minutes, pause_started_at
+      `select id, started_at, ended_at, duration_minutes, awake_minutes, pause_started_at, note
        from sleep_records
        order by started_at desc
        limit ${safeLimit}`
@@ -866,7 +871,8 @@ export async function getSleepTimeline(limit = 20) {
         endedAt: toIsoString(row.ended_at) || null,
         durationMinutes: row.duration_minutes ?? null,
         awakeMinutes: row.awake_minutes ?? 0,
-        pauseStartedAt: toIsoString(row.pause_started_at) || null
+        pauseStartedAt: toIsoString(row.pause_started_at) || null,
+        estimatedWake: Boolean(row.note?.includes("补记睡醒时间"))
       }))
       .filter((row) => row.startedAt)
       .reverse();
@@ -972,7 +978,11 @@ export async function getTodayDiaperSummary() {
     // The database server may run in UTC while the app runs in Asia/Shanghai.
     const now = new Date();
     const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const dayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const dayEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 1
+    );
     const [rows] = await getPool().query<DiaperSummaryRow[]>(
       `select
          sum(case when diaper_type in ('尿', '尿+便') then 1 else 0 end) as pee,
@@ -1262,7 +1272,9 @@ function parseReminderTimes(value: string | string[] | null | undefined) {
   }
 }
 
-export async function getMedicationPlans(includeInactive = false): Promise<MedicationPlan[]> {
+export async function getMedicationPlans(
+  includeInactive = false
+): Promise<MedicationPlan[]> {
   if (!hasCompleteMysqlConfig()) return [];
   const [rows] = await getPool().query<MedicationPlanRow[]>(
     `select id, name, dosage, administration_method, start_date, end_date,
@@ -1284,7 +1296,9 @@ export async function getMedicationPlans(includeInactive = false): Promise<Medic
   }));
 }
 
-export async function getMedicationRecords(limit = 60): Promise<MedicationRecord[]> {
+export async function getMedicationRecords(
+  limit = 60
+): Promise<MedicationRecord[]> {
   if (!hasCompleteMysqlConfig()) return [];
   const safeLimit = Math.max(1, Math.min(200, Math.trunc(limit)));
   const [rows] = await getPool().query<MedicationRecordRow[]>(
@@ -1417,22 +1431,43 @@ export async function getMedicationHomeStatus(now = new Date()) {
       day: "2-digit"
     }).format(now);
     const due = plans
-      .filter((plan) => plan.startDate <= dateKey && (!plan.endDate || plan.endDate >= dateKey))
-      .flatMap((plan) => plan.reminderTimes.map((time) => ({
-        planId: plan.id,
-        name: plan.name,
-        at: new Date(`${dateKey}T${time}:00+08:00`).toISOString()
-      })))
+      .filter(
+        (plan) =>
+          plan.startDate <= dateKey &&
+          (!plan.endDate || plan.endDate >= dateKey)
+      )
+      .flatMap((plan) =>
+        plan.reminderTimes.map((time) => ({
+          planId: plan.id,
+          name: plan.name,
+          at: new Date(`${dateKey}T${time}:00+08:00`).toISOString()
+        }))
+      )
       .sort((a, b) => a.at.localeCompare(b.at));
-    const resolvedKeys = new Set(records
-      .map((record) => `${record.planId}-${record.scheduledAt}`));
-    const takenKeys = new Set(records
-      .filter((record) => record.status === "taken")
-      .map((record) => `${record.planId}-${record.scheduledAt}`));
-    const pending = due.filter((item) => !resolvedKeys.has(`${item.planId}-${item.at}`));
-    const next = pending.find((item) => new Date(item.at).getTime() >= now.getTime()) ?? pending[0] ?? null;
-    const completed = due.filter((item) => takenKeys.has(`${item.planId}-${item.at}`)).length;
-    return { nextAt: next?.at ?? null, nextName: next?.name ?? null, completed, total: due.length };
+    const resolvedKeys = new Set(
+      records.map((record) => `${record.planId}-${record.scheduledAt}`)
+    );
+    const takenKeys = new Set(
+      records
+        .filter((record) => record.status === "taken")
+        .map((record) => `${record.planId}-${record.scheduledAt}`)
+    );
+    const pending = due.filter(
+      (item) => !resolvedKeys.has(`${item.planId}-${item.at}`)
+    );
+    const next =
+      pending.find((item) => new Date(item.at).getTime() >= now.getTime()) ??
+      pending[0] ??
+      null;
+    const completed = due.filter((item) =>
+      takenKeys.has(`${item.planId}-${item.at}`)
+    ).length;
+    return {
+      nextAt: next?.at ?? null,
+      nextName: next?.name ?? null,
+      completed,
+      total: due.length
+    };
   } catch {
     return { nextAt: null, nextName: null, completed: 0, total: 0 };
   }
