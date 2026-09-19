@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CareDayTimeline } from "@/components/CareDayTimeline";
 
 type Item = { happenedAt: string; diaperType: string };
 type Range = "日" | "周" | "月" | "年";
@@ -28,7 +29,7 @@ export function DiaperChart({ items }: { items: Item[] }) {
       <div className="mt-2 flex justify-between text-[10px] text-slate-400"><span>{buckets[0]?.label}</span><span>{buckets.at(-1)?.label}</span></div>
       <div className="mt-2 flex gap-4 text-xs text-slate-500"><Legend color="bg-cyan-300" label="排尿" /><Legend color="bg-amber-300" label="排便" /></div>
     </div> : <div className="mt-4 flex h-36 items-center justify-center rounded-[1.5rem] bg-white/35 text-sm text-slate-400">该时段暂无尿布记录</div>}
-    {range === "周" ? <div className="mt-3 rounded-2xl bg-white/50 p-3"><div className="grid grid-cols-7 gap-1">{buckets.map((bucket) => <button key={bucket.key} type="button" aria-pressed={activeDay === bucket.key} onClick={() => setSelectedDay(bucket.key)} className={`rounded-xl px-0.5 py-2 text-center text-[10px] sm:text-xs ${activeDay === bucket.key ? "bg-indigo-100 ring-1 ring-indigo-300" : "bg-white/60"}`}><span className="block font-semibold">尿{bucket.pee}·便{bucket.poop}</span><span className="block text-slate-500">{bucket.label}</span></button>)}</div><p className="mt-3 text-xs font-medium text-slate-600">{activeDay.slice(5).replace("-", "/")} · 排尿 {dayRecords.filter((item) => item.diaperType !== "便").length} 次 · 排便 {dayRecords.filter((item) => item.diaperType !== "尿").length} 次</p>{dayRecords.length ? <div className="mt-2 flex flex-wrap gap-1.5">{dayRecords.map((item, index) => <span key={`${item.happenedAt}-${index}`} className="rounded-full bg-indigo-50 px-2 py-1 text-xs text-slate-600">{clock(item.happenedAt)} · {item.diaperType}</span>)}</div> : <p className="mt-2 text-xs text-slate-400">当天无尿布记录</p>}</div> : null}
+    {range === "周" ? <div className="mt-3 rounded-2xl bg-white/50 p-3"><div className="grid grid-cols-7 gap-1">{buckets.map((bucket) => <button key={bucket.key} type="button" aria-pressed={activeDay === bucket.key} onClick={() => setSelectedDay(bucket.key)} className={`rounded-xl px-0.5 py-2 text-center text-[10px] sm:text-xs ${activeDay === bucket.key ? "bg-indigo-100 ring-1 ring-indigo-300" : "bg-white/60"}`}><span className="block font-semibold">尿{bucket.pee}·便{bucket.poop}</span><span className="block text-slate-500">{bucket.label}</span></button>)}</div><CareDayTimeline key={activeDay} day={activeDay} events={dayRecords.map((item) => ({ time: item.happenedAt, label: `${clock(item.happenedAt)} · ${item.diaperType}`, color: item.diaperType === "便" ? "amber" : "cyan" }))} /></div> : null}
     <div className="mt-3 grid grid-cols-2 gap-2 text-center text-sm"><Summary label="排尿次数" value={`${pee} 次`} /><Summary label="排便次数" value={`${poop} 次`} /></div>
   </section>;
 }

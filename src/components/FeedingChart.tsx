@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { CareDayTimeline } from "@/components/CareDayTimeline";
 
 type FeedingItem = {
   happenedAt: string;
@@ -53,7 +54,7 @@ export function FeedingChart({ items }: { items: FeedingItem[] }) {
         </div>
       ) : <div className="mt-4 flex h-36 items-center justify-center rounded-[1.5rem] bg-white/35 text-sm text-slate-400">该时段暂无喂养记录</div>}
 
-      {range === "周" ? <div className="mt-3 rounded-2xl bg-white/50 p-3"><div className="grid grid-cols-7 gap-1">{buckets.map((bucket) => <button key={bucket.key} type="button" aria-pressed={activeDay === bucket.key} onClick={() => setSelectedDay(bucket.key)} className={`rounded-xl px-0.5 py-2 text-center text-[10px] sm:text-xs ${activeDay === bucket.key ? "bg-indigo-100 ring-1 ring-indigo-300" : "bg-white/60"}`}><span className="block font-semibold">{bucket.breast + bucket.bottle}次</span><span className="block text-slate-500">{bucket.label}</span></button>)}</div><p className="mt-3 text-xs font-medium text-slate-600">{activeDay.slice(5).replace("-", "/")} · {dayRecords.length} 次喂养</p>{dayRecords.length ? <div className="mt-2 flex flex-wrap gap-1.5">{dayRecords.map((item, index) => <span key={`${item.happenedAt}-${index}`} className="rounded-full bg-indigo-50 px-2 py-1 text-xs text-slate-600">{clock(item.happenedAt)} {item.feedingType}{item.feedingType === "母乳" ? item.durationMinutes ? ` · ${Math.round(item.durationMinutes)}分` : "" : item.amountMl ? ` · ${item.amountMl}ml` : ""}</span>)}</div> : <p className="mt-2 text-xs text-slate-400">当天无喂养记录</p>}</div> : null}
+      {range === "周" ? <div className="mt-3 rounded-2xl bg-white/50 p-3"><div className="grid grid-cols-7 gap-1">{buckets.map((bucket) => <button key={bucket.key} type="button" aria-pressed={activeDay === bucket.key} onClick={() => setSelectedDay(bucket.key)} className={`rounded-xl px-0.5 py-2 text-center text-[10px] sm:text-xs ${activeDay === bucket.key ? "bg-indigo-100 ring-1 ring-indigo-300" : "bg-white/60"}`}><span className="block font-semibold">{bucket.breast + bucket.bottle}次</span><span className="block text-slate-500">{bucket.label}</span></button>)}</div><CareDayTimeline key={activeDay} day={activeDay} events={dayRecords.map((item) => ({ time: item.happenedAt, label: `${clock(item.happenedAt)} ${item.feedingType}${item.feedingType === "母乳" ? item.durationMinutes ? ` · ${Math.round(item.durationMinutes)}分` : "" : item.amountMl ? ` · ${item.amountMl}ml` : ""}`, color: item.feedingType === "母乳" ? "violet" : "cyan" }))} /></div> : null}
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-center text-sm md:grid-cols-4">
         <Summary label="喂养总次数" value={`${visible.length} 次`} />
