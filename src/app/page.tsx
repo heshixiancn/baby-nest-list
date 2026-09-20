@@ -77,7 +77,7 @@ export default async function HomePage() {
     getHomeCountdown(),
     getCarePrediction(),
     getCareTrends(),
-    getSleepTimeline()
+    getSleepTimeline(3000)
   ]);
   const ageParts = splitAgeLabel(babyReference.ageLabel);
 
