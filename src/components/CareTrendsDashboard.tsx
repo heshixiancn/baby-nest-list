@@ -1,4 +1,10 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { SleepChart } from "@/components/SleepChart";
+import type { SleepRange } from "@/components/SleepChart";
+import { DashboardMetricCard } from "@/components/DashboardMetricCard";
+import { DashboardFeedingCard } from "@/components/DashboardFeedingCard";
 
 type TrendPoint = {
   time: string;
@@ -19,6 +25,14 @@ type SleepTimelineItem = {
   durationMinutes: number | null;
   awakeMinutes: number;
   pauseStartedAt: string | null;
+};
+
+type FeedingHistoryItem = {
+  happenedAt: string;
+  endedAt: string | null;
+  feedingType: string;
+  amountMl: number | null;
+  durationMinutes: number | null;
 };
 
 const cards = [
@@ -51,35 +65,87 @@ const cards = [
 export function CareTrendsDashboard({
   trends,
   sleepTimeline = [],
+  feedingHistory = [],
   compact = false
 }: {
   trends: Trends;
   sleepTimeline?: SleepTimelineItem[];
+  feedingHistory?: FeedingHistoryItem[];
   compact?: boolean;
 }) {
+  const [dashboardRange, setDashboardRange] = useState<SleepRange>("日");
+  useEffect(() => {
+    const saved = window.sessionStorage.getItem("baby-nest-dashboard-range");
+    if (saved === "日" || saved === "周" || saved === "月" || saved === "年")
+      setDashboardRange(saved);
+  }, []);
+  function selectDashboardRange(value: SleepRange) {
+    setDashboardRange(value);
+    window.sessionStorage.setItem("baby-nest-dashboard-range", value);
+  }
   if (compact) {
     return (
-      <section className="grid min-h-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-        <section className="grid grid-cols-2 gap-3">
-          {cards.map((card) => (
-            <TrendCard key={card.key} title={card.title} unit={card.unit} tone={card.tone} points={trends[card.key]} compact />
-          ))}
-        </section>
-        <SleepChart items={sleepTimeline} />
+      <section className="space-y-3">
+        <div className="flex items-center justify-between gap-3 rounded-full border border-white/80 bg-white/55 px-4 py-2 backdrop-blur-xl">
+          <span className="text-sm font-medium text-slate-600">
+            照护趋势 · 北京时间
+          </span>
+          <div
+            className="flex rounded-full bg-white/75 p-1"
+            role="group"
+            aria-label="所有图表的时间范围"
+          >
+            {(["日", "周", "月", "年"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={dashboardRange === value}
+                onClick={() => selectDashboardRange(value)}
+                className={`rounded-full px-3 py-1 text-xs transition ${dashboardRange === value ? "bg-indigo-300 text-slate-700 shadow-sm" : "text-slate-500 hover:bg-indigo-50"}`}
+              >
+                {value}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="grid min-h-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+          <section className="grid min-h-0 gap-3" aria-label="近期照护趋势">
+            <DashboardFeedingCard
+              items={feedingHistory}
+              range={dashboardRange}
+            />
+            <DashboardMetricCard
+              kind="temperature"
+              points={trends.temperature}
+              range={dashboardRange}
+            />
+            <DashboardMetricCard
+              kind="weight"
+              points={trends.weight}
+              range={dashboardRange}
+            />
+          </section>
+          <SleepChart
+            key={dashboardRange}
+            items={sleepTimeline}
+            selectedRange={dashboardRange}
+            hideRangeSelector
+          />
+        </div>
       </section>
     );
   }
 
   return (
     <section className="page-shell space-y-5">
-      {(
+      {
         <section className="rounded-[2rem] border border-white/80 bg-white/60 p-5 shadow-2xl shadow-slate-200/50 backdrop-blur-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
             Trends
           </p>
           <h1 className="apple-hello-text mt-2 text-4xl">成长记录</h1>
         </section>
-      )}
+      }
 
       <AnalysisSummary trends={trends} />
 
@@ -157,11 +223,15 @@ function TrendCard({
       : 0;
 
   return (
-    <article className={`border border-white/80 bg-white/60 shadow-xl shadow-slate-200/40 backdrop-blur-2xl ${compact ? "rounded-[1.5rem] p-3" : "rounded-[2rem] p-5"}`}>
+    <article
+      className={`border border-white/80 bg-white/60 shadow-xl shadow-slate-200/40 backdrop-blur-2xl ${compact ? "rounded-[1.5rem] p-3" : "rounded-[2rem] p-5"}`}
+    >
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-slate-500">{title}</p>
-          <p className={`apple-hello-text mt-1 ${compact ? "text-2xl" : "text-3xl"}`}>
+          <p
+            className={`apple-hello-text mt-1 ${compact ? "text-2xl" : "text-3xl"}`}
+          >
             {latest ? `${latest.value}${unit}` : "暂无"}
           </p>
         </div>
@@ -174,13 +244,17 @@ function TrendCard({
         {points.length >= 2 ? (
           <Sparkline points={points} tone={tone} compact={compact} />
         ) : (
-          <div className={`flex items-center justify-center rounded-[1.5rem] bg-slate-50/70 text-sm text-slate-400 ${compact ? "h-16" : "h-40"}`}>
+          <div
+            className={`flex items-center justify-center rounded-[1.5rem] bg-slate-50/70 text-sm text-slate-400 ${compact ? "h-16" : "h-40"}`}
+          >
             记录几次后显示趋势
           </div>
         )}
       </div>
 
-      <div className={`${compact ? "mt-2" : "mt-4"} flex items-center justify-between text-xs text-slate-500`}>
+      <div
+        className={`${compact ? "mt-2" : "mt-4"} flex items-center justify-between text-xs text-slate-500`}
+      >
         <span>{latest ? formatDateTime(latest.time) : "暂无记录"}</span>
         {points.length >= 2 ? (
           <span>
@@ -194,7 +268,15 @@ function TrendCard({
   );
 }
 
-function Sparkline({ points, tone, compact = false }: { points: TrendPoint[]; tone: string; compact?: boolean }) {
+function Sparkline({
+  points,
+  tone,
+  compact = false
+}: {
+  points: TrendPoint[];
+  tone: string;
+  compact?: boolean;
+}) {
   const width = 420;
   const height = 160;
   const padding = 18;

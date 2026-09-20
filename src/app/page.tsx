@@ -9,7 +9,11 @@ import {
 import { getBabyReference } from "@/lib/baby-reference";
 import { getHomeCountdown } from "@/lib/care-countdown";
 import { getCarePrediction } from "@/lib/care-prediction";
-import { getCareTrends, getSleepTimeline } from "@/lib/mysql";
+import {
+  getCareTrends,
+  getRecentFeedingHistory,
+  getSleepTimeline
+} from "@/lib/mysql";
 
 export const dynamic = "force-dynamic";
 
@@ -73,12 +77,14 @@ const recordActions = [
 export default async function HomePage() {
   const hasDatabaseConfig = hasCompletePrimaryDatabaseConfig();
   const babyReference = getBabyReference();
-  const [countdown, prediction, trends, sleepTimeline] = await Promise.all([
-    getHomeCountdown(),
-    getCarePrediction(),
-    getCareTrends(),
-    getSleepTimeline(3000)
-  ]);
+  const [countdown, prediction, trends, sleepTimeline, feedingHistory] =
+    await Promise.all([
+      getHomeCountdown(),
+      getCarePrediction(),
+      getCareTrends(5000),
+      getSleepTimeline(3000),
+      getRecentFeedingHistory(5000)
+    ]);
   const ageParts = splitAgeLabel(babyReference.ageLabel);
 
   return (
@@ -94,15 +100,29 @@ export default async function HomePage() {
           <div className="absolute inset-6 rounded-full bg-gradient-to-r from-cyan-200/25 via-indigo-200/30 to-pink-200/25 blur-xl" />
           <div className="relative flex w-full items-stretch gap-2">
             <div className="flex w-10 shrink-0 items-center justify-center border-r border-white/80 pr-2">
-              <span className="flex flex-col items-center gap-1 font-mono text-[0.68rem] font-semibold leading-none text-slate-400" aria-label="BORN">
-                {["B", "O", "R", "N"].map((letter) => <span key={letter} aria-hidden="true">{letter}</span>)}
+              <span
+                className="flex flex-col items-center gap-1 font-mono text-[0.68rem] font-semibold leading-none text-slate-400"
+                aria-label="BORN"
+              >
+                {["B", "O", "R", "N"].map((letter) => (
+                  <span key={letter} aria-hidden="true">
+                    {letter}
+                  </span>
+                ))}
               </span>
             </div>
             <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
               {ageParts.map((part, index) => (
-                <div key={`${part.unit}-mobile-${index}`} className="flex min-h-[5.5rem] min-w-0 flex-col items-center justify-center rounded-[1.3rem] border border-white/90 bg-white/40 px-2 py-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.95),0_8px_20px_rgba(148,163,184,0.1)] ring-1 ring-indigo-100/50 backdrop-blur-2xl">
-                  <span className="font-mono text-[1.8rem] font-medium leading-none tracking-[-0.06em] text-slate-600 tabular-nums">{part.value}</span>
-                  <span className="mt-2 text-[0.68rem] font-medium tracking-[0.14em] text-slate-400">{part.unit}</span>
+                <div
+                  key={`${part.unit}-mobile-${index}`}
+                  className="flex min-h-[5.5rem] min-w-0 flex-col items-center justify-center rounded-[1.3rem] border border-white/90 bg-white/40 px-2 py-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.95),0_8px_20px_rgba(148,163,184,0.1)] ring-1 ring-indigo-100/50 backdrop-blur-2xl"
+                >
+                  <span className="font-mono text-[1.8rem] font-medium leading-none tracking-[-0.06em] text-slate-600 tabular-nums">
+                    {part.value}
+                  </span>
+                  <span className="mt-2 text-[0.68rem] font-medium tracking-[0.14em] text-slate-400">
+                    {part.unit}
+                  </span>
                 </div>
               ))}
             </div>
@@ -122,73 +142,69 @@ export default async function HomePage() {
                 </p>
                 <h1 className="apple-hello-text mt-2 text-4xl">今日预测</h1>
               </div>
-              <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-medium text-slate-500 ring-1 ring-white/70">
-                动态调整
-              </span>
+              <span className="text-xs text-slate-500">北京时间</span>
             </div>
 
-            <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-5">
-              <PredictionCard
-                title="推荐奶量"
-                value={`${prediction.feeding.targetMl} ml`}
-                meta={`${prediction.feeding.minMl}–${prediction.feeding.maxMl} ml`}
-                tone="from-cyan-100/80 to-violet-100/80"
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <PredictionPanel
+                label="下次喂养"
+                icon="🍼"
+                tone="from-cyan-100/75 to-emerald-100/75"
+                value={formatPredictionRange(
+                  prediction.feeding.windowStartAt,
+                  prediction.feeding.windowEndAt
+                )}
+                detail={`建议 ${prediction.feeding.targetMl} ml · 范围 ${prediction.feeding.minMl}–${prediction.feeding.maxMl} ml`}
+                foot={
+                  prediction.feeding.conflictsWithSleep
+                    ? "可能与睡眠重叠"
+                    : `约 ${formatMinutes(prediction.feeding.intervalMinutes)} 后`
+                }
               />
-              <PredictionCard
-                title="下次喂养"
-                value={formatPredictionRange(prediction.feeding.windowStartAt, prediction.feeding.windowEndAt)}
-                meta={prediction.feeding.conflictsWithSleep ? "与睡眠区间可能重叠" : `约 ${formatMinutes(prediction.feeding.intervalMinutes)} 间隔`}
-                tone="from-sky-100/80 to-emerald-100/80"
-              />
-              <PredictionCard
-                title={prediction.status.isSleeping ? "预计醒来" : "预计入睡"}
+              <PredictionPanel
+                label={prediction.status.isSleeping ? "预计醒来" : "预计入睡"}
+                icon="🌙"
+                tone="from-indigo-100/75 to-pink-100/75"
                 value={formatPredictionTime(
                   prediction.status.isSleeping
                     ? prediction.sleep.predictedEndAt
                     : prediction.sleep.predictedStartAt
                 )}
-                meta={`醒窗约 ${formatMinutes(prediction.sleep.wakeWindowMinutes)}`}
-                tone="from-indigo-100/80 to-pink-100/80"
-              />
-              <PredictionCard
-                title="睡眠结束"
-                value={formatPredictionTime(prediction.sleep.predictedEndAt)}
-                meta={`小睡约 ${formatMinutes(prediction.sleep.expectedNapMinutes)}`}
-                tone="from-violet-100/80 to-sky-100/80"
-              />
-              <PredictionCard
-                title="尿布提醒"
-                value={formatPredictionTime(prediction.diaper.nextPeeAt)}
-                meta={`尿${countdown.diaperPeeToday} · 便${countdown.diaperPoopToday}`}
-                tone="from-teal-100/80 to-blue-100/80"
-              />
-            </div>
-
-            <div className="mt-3 grid grid-cols-3 gap-3">
-              <MiniPrediction
-                label="预计小睡"
-                value={
+                detail={
                   prediction.status.isSleeping
-                    ? `本次约到 ${formatPredictionTime(prediction.sleep.predictedEndAt)}`
-                    : `${formatPredictionTime(prediction.sleep.predictedStartAt)}–${formatPredictionTime(
-                        prediction.sleep.predictedEndAt
-                      )}`
+                    ? `本次预计睡 ${formatMinutes(prediction.sleep.expectedNapMinutes)}`
+                    : `预计 ${formatPredictionTime(prediction.sleep.predictedEndAt)} 醒来`
                 }
+                foot={`醒窗约 ${formatMinutes(prediction.sleep.wakeWindowMinutes)}`}
               />
-              <MiniPrediction
-                label="排便参考"
-                value={
-                  prediction.diaper.nextPoopAt
-                    ? formatPredictionTime(prediction.diaper.nextPoopAt)
-                    : "继续观察"
-                }
+              <PredictionPanel
+                label="下次尿布"
+                icon="💩"
+                tone="from-sky-100/75 to-cyan-100/75"
+                value={formatPredictionTime(prediction.diaper.nextPeeAt)}
+                detail={`今日尿 ${countdown.diaperPeeToday} 次 · 便 ${countdown.diaperPoopToday} 次`}
+                foot={`排便参考 ${prediction.diaper.nextPoopAt ? formatPredictionTime(prediction.diaper.nextPoopAt) : "继续观察"}`}
               />
-              <MiniPrediction
-                label="体温 / 体重"
-                value={`${countdown.temperatureMeasuredToday ? "体温已测" : "体温未测"} · ${
-                  countdown.weightMeasuredToday ? "体重已测" : "体重未测"
-                }`}
-              />
+              <div className="flex min-h-[9rem] flex-col justify-between rounded-[1.5rem] border border-white/80 bg-gradient-to-br from-rose-50/80 to-indigo-50/80 p-4 shadow-sm ring-1 ring-white/70">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-600">
+                    今日测量
+                  </p>
+                  <span className="text-xl" aria-hidden="true">
+                    🌡️
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <MeasureStatus
+                    label="体温"
+                    measured={countdown.temperatureMeasuredToday}
+                  />
+                  <MeasureStatus
+                    label="体重"
+                    measured={countdown.weightMeasuredToday}
+                  />
+                </div>
+              </div>
             </div>
           </div>
           <div className="relative flex min-h-52 items-center justify-center overflow-hidden rounded-[2rem] border border-white/80 bg-gradient-to-br from-sky-50/70 via-white/55 to-pink-50/70 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-2xl">
@@ -196,15 +212,29 @@ export default async function HomePage() {
             <div className="absolute -right-10 top-1/3 h-36 w-36 rounded-full bg-pink-200/25 blur-3xl" />
             <div className="relative flex w-full items-stretch justify-center gap-5 px-2 xl:gap-7">
               <div className="flex min-h-48 items-center justify-center border-r border-white/70 pr-5 xl:pr-7">
-                <span className="flex flex-col items-center gap-2.5 font-mono text-xl font-semibold leading-none text-slate-400" aria-label="BORN">
-                  {["B", "O", "R", "N"].map((letter) => <span key={letter} aria-hidden="true">{letter}</span>)}
+                <span
+                  className="flex flex-col items-center gap-2.5 font-mono text-xl font-semibold leading-none text-slate-400"
+                  aria-label="BORN"
+                >
+                  {["B", "O", "R", "N"].map((letter) => (
+                    <span key={letter} aria-hidden="true">
+                      {letter}
+                    </span>
+                  ))}
                 </span>
               </div>
               <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
                 {ageParts.map((part, index) => (
-                  <div key={`${part.unit}-${index}`} className="flex min-h-48 min-w-0 flex-col items-center justify-center rounded-[1.75rem] border border-white/90 bg-white/40 px-3 py-7 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_12px_30px_rgba(148,163,184,0.12)] ring-1 ring-indigo-100/50 backdrop-blur-2xl">
-                    <span className="font-mono text-[clamp(2.25rem,4vw,4rem)] font-medium leading-none tracking-[-0.06em] text-slate-600 tabular-nums">{part.value}</span>
-                    <span className="mt-3 text-sm font-medium tracking-[0.18em] text-slate-400">{part.unit}</span>
+                  <div
+                    key={`${part.unit}-${index}`}
+                    className="flex min-h-48 min-w-0 flex-col items-center justify-center rounded-[1.75rem] border border-white/90 bg-white/40 px-3 py-7 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_12px_30px_rgba(148,163,184,0.12)] ring-1 ring-indigo-100/50 backdrop-blur-2xl"
+                  >
+                    <span className="font-mono text-[clamp(2.25rem,4vw,4rem)] font-medium leading-none tracking-[-0.06em] text-slate-600 tabular-nums">
+                      {part.value}
+                    </span>
+                    <span className="mt-3 text-sm font-medium tracking-[0.18em] text-slate-400">
+                      {part.unit}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -215,6 +245,7 @@ export default async function HomePage() {
         <CareTrendsDashboard
           trends={trends}
           sleepTimeline={sleepTimeline}
+          feedingHistory={feedingHistory}
           compact
         />
       </div>
@@ -232,33 +263,57 @@ export default async function HomePage() {
   );
 }
 
-function PredictionCard({
-  title,
+function PredictionPanel({
+  label,
+  icon,
+  tone,
   value,
-  meta,
-  tone
+  detail,
+  foot
 }: {
-  title: string;
-  value: string;
-  meta: string;
+  label: string;
+  icon: string;
   tone: string;
+  value: string;
+  detail: string;
+  foot: string;
 }) {
   return (
     <div
-      className={`rounded-[1.5rem] border border-white/80 bg-gradient-to-br ${tone} p-4 shadow-sm ring-1 ring-white/60 backdrop-blur-2xl`}
+      className={`flex min-h-[9rem] min-w-0 flex-col justify-between rounded-[1.5rem] border border-white/80 bg-gradient-to-br ${tone} p-4 shadow-sm ring-1 ring-white/70`}
     >
-      <p className="text-xs font-medium text-slate-500">{title}</p>
-      <p className="apple-hello-text mt-2 text-2xl tabular-nums">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{meta}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-slate-600">{label}</p>
+        <span className="text-xl" aria-hidden="true">
+          {icon}
+        </span>
+      </div>
+      <p className="font-mono text-[clamp(1.3rem,2vw,2rem)] leading-tight tracking-tight text-slate-700 tabular-nums">
+        {value}
+      </p>
+      <div>
+        <p className="text-xs font-medium text-slate-600">{detail}</p>
+        <p className="mt-0.5 text-[11px] text-slate-500">{foot}</p>
+      </div>
     </div>
   );
 }
 
-function MiniPrediction({ label, value }: { label: string; value: string }) {
+function MeasureStatus({
+  label,
+  measured
+}: {
+  label: string;
+  measured: boolean;
+}) {
   return (
-    <div className="rounded-[1.25rem] bg-white/45 px-4 py-3 ring-1 ring-white/70">
-      <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="apple-hello-text mt-1 text-lg">{value}</p>
+    <div className="rounded-2xl bg-white/65 px-3 py-2.5 ring-1 ring-white/80">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p
+        className={`mt-1 text-base font-semibold ${measured ? "text-emerald-700" : "text-slate-600"}`}
+      >
+        {measured ? "已测" : "未测"}
+      </p>
     </div>
   );
 }
@@ -290,6 +345,13 @@ function splitAgeLabel(label: string) {
     .slice(0, 2)
     .map((match) => ({ value: match[1], unit: match[2] }));
   if (matches.length === 2) return matches;
-  if (matches.length === 1) return [matches[0], { value: "00", unit: matches[0].unit === "岁" ? "个月" : "小时" }];
-  return [{ value: "--", unit: "年龄" }, { value: "--", unit: "" }];
+  if (matches.length === 1)
+    return [
+      matches[0],
+      { value: "00", unit: matches[0].unit === "岁" ? "个月" : "小时" }
+    ];
+  return [
+    { value: "--", unit: "年龄" },
+    { value: "--", unit: "" }
+  ];
 }

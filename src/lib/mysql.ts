@@ -756,7 +756,7 @@ export async function getRecentBottleFeedingAmounts(limit = 6) {
 
 export async function getRecentFeedingHistory(limit = 24) {
   if (!hasCompleteMysqlConfig()) return [];
-  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 1000);
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 5000);
   const [rows] = await getPool().query<FeedingHistoryRow[]>(
     `select happened_at, ended_at, feeding_type, amount_ml, duration_minutes
      from feeding_records
@@ -781,7 +781,7 @@ export async function getCareTrends(limit = 20) {
   }
 
   try {
-    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 1000);
+    const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 5000);
     const [feedingRows] = await getPool().query<CareTrendRow[]>(
       `select happened_at, amount_ml
          from feeding_records
