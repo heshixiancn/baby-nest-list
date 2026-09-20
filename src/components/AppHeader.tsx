@@ -6,8 +6,6 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/", label: "照护首页" },
-  { href: "/care/feeding", label: "喂养尿布" },
-  { href: "/care/health", label: "成长健康" },
   { href: "/care/tasks", label: "提醒待办" },
   { href: "/care/medication", label: "用药管理" },
   { href: "/shopping-list", label: "采购清单" }

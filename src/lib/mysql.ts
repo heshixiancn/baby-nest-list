@@ -943,6 +943,157 @@ export async function deleteCareRecord(type: string, id: string) {
   await getPool().execute(`delete from ${table} where id = :id`, { id });
 }
 
+export type CareRecordEdit = {
+  id: string;
+  type: string;
+  happenedAt: string;
+  endedAt?: string | null;
+  feedingType?: string;
+  side?: string;
+  amountMl?: number | null;
+  durationMinutes?: number | null;
+  diaperType?: string;
+  stoolColor?: string;
+  temperatureC?: number;
+  measureMethod?: string;
+  weightGrams?: number;
+  place?: string;
+  awakeMinutes?: number;
+  note?: string;
+};
+
+export async function getCareRecord(
+  type: string,
+  id: string
+): Promise<CareRecordEdit | null> {
+  const queries: Record<string, string> = {
+    feeding:
+      "select happened_at, ended_at, feeding_type, side, amount_ml, duration_minutes, note from feeding_records where id = :id limit 1",
+    diaper:
+      "select happened_at, diaper_type, stool_color, note from diaper_records where id = :id limit 1",
+    temperature:
+      "select measured_at as happened_at, temperature_c, measure_method, note from temperature_records where id = :id limit 1",
+    weight:
+      "select measured_at as happened_at, weight_grams, place, note from weight_records where id = :id limit 1",
+    sleep:
+      "select started_at as happened_at, ended_at, duration_minutes, awake_minutes, note from sleep_records where id = :id limit 1"
+  };
+  if (!queries[type]) throw new Error("未知记录类型。");
+  const [rows] = await getPool().query<RowDataPacket[]>(queries[type], { id });
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id,
+    type,
+    happenedAt: toIsoString(row.happened_at),
+    endedAt: row.ended_at ? toIsoString(row.ended_at) : null,
+    feedingType: row.feeding_type,
+    side: row.side ?? "",
+    amountMl: row.amount_ml == null ? null : toNumber(row.amount_ml),
+    durationMinutes:
+      row.duration_minutes == null ? null : toNumber(row.duration_minutes),
+    diaperType: row.diaper_type,
+    stoolColor: row.stool_color ?? "",
+    temperatureC:
+      row.temperature_c == null ? undefined : toNumber(row.temperature_c),
+    measureMethod: row.measure_method ?? "",
+    weightGrams:
+      row.weight_grams == null ? undefined : toNumber(row.weight_grams),
+    place: row.place ?? "",
+    awakeMinutes:
+      row.awake_minutes == null ? undefined : toNumber(row.awake_minutes),
+    note: row.note ?? ""
+  };
+}
+
+export async function updateCareRecord(input: CareRecordEdit) {
+  const previous = await getCareRecord(input.type, input.id);
+  if (!previous) throw new Error("记录不存在，可能已被删除。");
+  const happenedAt = new Date(input.happenedAt);
+  const endedAt = input.endedAt ? new Date(input.endedAt) : null;
+  const common = { id: input.id, happenedAt, note: input.note ?? "" };
+  let query: string;
+  let params: Record<string, string | number | Date | null>;
+  switch (input.type) {
+    case "feeding": {
+      const durationMinutes = endedAt
+        ? Math.max(
+            1,
+            Math.round((endedAt.getTime() - happenedAt.getTime()) / 60000)
+          )
+        : (input.durationMinutes ?? null);
+      query = `update feeding_records set happened_at = :happenedAt, ended_at = :endedAt,
+        feeding_type = :feedingType, side = :side, amount_ml = :amountMl,
+        duration_minutes = :durationMinutes, note = :note where id = :id`;
+      params = {
+        ...common,
+        endedAt: input.feedingType === "母乳" ? endedAt : null,
+        feedingType: input.feedingType ?? "",
+        side: input.side ?? "",
+        amountMl:
+          input.feedingType === "母乳" ? null : (input.amountMl ?? null),
+        durationMinutes: input.feedingType === "母乳" ? durationMinutes : null
+      };
+      break;
+    }
+    case "diaper":
+      query = `update diaper_records set happened_at = :happenedAt, diaper_type = :diaperType,
+        stool_color = :stoolColor, note = :note where id = :id`;
+      params = {
+        ...common,
+        diaperType: input.diaperType ?? "",
+        stoolColor: input.diaperType === "尿" ? "" : (input.stoolColor ?? "")
+      };
+      break;
+    case "temperature":
+      query = `update temperature_records set measured_at = :happenedAt, temperature_c = :temperatureC,
+        measure_method = :measureMethod, note = :note where id = :id`;
+      params = {
+        ...common,
+        temperatureC: input.temperatureC ?? 0,
+        measureMethod: input.measureMethod ?? ""
+      };
+      break;
+    case "weight":
+      query = `update weight_records set measured_at = :happenedAt, weight_grams = :weightGrams,
+        place = :place, note = :note where id = :id`;
+      params = {
+        ...common,
+        weightGrams: input.weightGrams ?? 0,
+        place: input.place ?? ""
+      };
+      break;
+    case "sleep":
+      if (
+        endedAt &&
+        Math.round((endedAt.getTime() - happenedAt.getTime()) / 60000) <=
+          (previous.awakeMinutes ?? 0)
+      ) {
+        throw new Error("睡眠时长不能短于暂醒时长。");
+      }
+      query = `update sleep_records set started_at = :happenedAt, ended_at = :endedAt,
+        duration_minutes = :durationMinutes, pause_started_at = case when :endedAt is null then pause_started_at else null end,
+        note = :note where id = :id`;
+      params = {
+        ...common,
+        endedAt,
+        durationMinutes: endedAt
+          ? Math.max(
+              1,
+              Math.round((endedAt.getTime() - happenedAt.getTime()) / 60000) -
+                (previous.awakeMinutes ?? 0)
+            )
+          : null
+      };
+      break;
+    default:
+      throw new Error("未知记录类型。");
+  }
+  const [result] = await getPool().execute<ResultSetHeader>(query, params);
+  if (!result.affectedRows) throw new Error("记录不存在，可能已被删除。");
+  return getCareRecord(input.type, input.id);
+}
+
 export async function createDiaperRecord(input: {
   happenedAt?: string;
   diaperType: string;

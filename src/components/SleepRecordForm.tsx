@@ -21,6 +21,10 @@ export function SleepRecordForm({
   const [openSleep, setOpenSleep] = useState<OpenSleep | null>(null);
   const [startedAt, setStartedAt] = useState(currentDatetimeLocalValue);
   const [endedAt, setEndedAt] = useState(currentDatetimeLocalValue);
+  const [manualStartedAt, setManualStartedAt] = useState(
+    currentDatetimeLocalValue
+  );
+  const [manualEndedAt, setManualEndedAt] = useState(currentDatetimeLocalValue);
   const [endedAtTouched, setEndedAtTouched] = useState(false);
   const [showWakePicker, setShowWakePicker] = useState(false);
   const [note, setNote] = useState("");
@@ -49,8 +53,8 @@ export function SleepRecordForm({
   }, [endedAtTouched, openSleep]);
 
   const manualDuration = useMemo(
-    () => calculateDurationMinutes(startedAt, endedAt),
-    [endedAt, startedAt]
+    () => calculateDurationMinutes(manualStartedAt, manualEndedAt),
+    [manualEndedAt, manualStartedAt]
   );
 
   async function refreshOpenSleep() {
@@ -106,10 +110,15 @@ export function SleepRecordForm({
       return;
     }
 
+    if (manualDuration > 1440) {
+      setError("补录睡眠不能超过 24 小时。");
+      return;
+    }
+
     await saveSleep({
       action: "manual",
-      startedAt,
-      endedAt,
+      startedAt: manualStartedAt,
+      endedAt: manualEndedAt,
       durationMinutes: manualDuration,
       note
     });
@@ -153,9 +162,14 @@ export function SleepRecordForm({
       );
       setLastSubmit({ key: submitKey, savedAt: Date.now() });
       setNote("");
-      setEndedAt(currentDatetimeLocalValue());
-      setStartedAt(currentDatetimeLocalValue());
-      setEndedAtTouched(false);
+      if (payload.action === "manual") {
+        setManualStartedAt(currentDatetimeLocalValue());
+        setManualEndedAt(currentDatetimeLocalValue());
+      } else {
+        setEndedAt(currentDatetimeLocalValue());
+        setStartedAt(currentDatetimeLocalValue());
+        setEndedAtTouched(false);
+      }
       await refreshOpenSleep();
       window.setTimeout(() => setMessage(""), 2400);
       return true;
@@ -307,7 +321,13 @@ export function SleepRecordForm({
             </div>
           </div>
 
-          <details className="group rounded-2xl bg-white/35 px-3 py-1.5 text-sm text-slate-500 ring-1 ring-white/60">
+          <details
+            className="group rounded-2xl bg-white/35 px-3 py-1.5 text-sm text-slate-500 ring-1 ring-white/60"
+            onToggle={(event) => {
+              if (event.currentTarget.open)
+                setManualEndedAt(currentDatetimeLocalValue());
+            }}
+          >
             <summary className="cursor-pointer list-none font-medium">
               补录睡眠
               <span className="ml-1 text-slate-400">忘记点开始时用</span>
@@ -317,18 +337,15 @@ export function SleepRecordForm({
                 <div className="min-w-0">
                   <RecordTimePicker
                     label="开始"
-                    value={startedAt}
-                    onChange={setStartedAt}
+                    value={manualStartedAt}
+                    onChange={setManualStartedAt}
                   />
                 </div>
                 <div className="min-w-0">
                   <RecordTimePicker
                     label="结束"
-                    value={endedAt}
-                    onChange={(value) => {
-                      setEndedAtTouched(true);
-                      setEndedAt(value);
-                    }}
+                    value={manualEndedAt}
+                    onChange={setManualEndedAt}
                   />
                 </div>
               </div>
