@@ -1,6 +1,8 @@
 import { HomeActionGrid } from "@/components/HomeActionGrid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { CareTrendsDashboard } from "@/components/CareTrendsDashboard";
+import { TodayMeasurements } from "@/components/TodayMeasurements";
+import { PredictionCountdown } from "@/components/PredictionCountdown";
 import {
   getPrimaryDatabaseConfigError,
   getPrimaryDatabaseLabel,
@@ -11,6 +13,7 @@ import { getHomeCountdown } from "@/lib/care-countdown";
 import { getCarePrediction } from "@/lib/care-prediction";
 import {
   getCareTrends,
+  getRecentDiaperHistory,
   getRecentFeedingHistory,
   getSleepTimeline
 } from "@/lib/mysql";
@@ -77,14 +80,21 @@ const recordActions = [
 export default async function HomePage() {
   const hasDatabaseConfig = hasCompletePrimaryDatabaseConfig();
   const babyReference = getBabyReference();
-  const [countdown, prediction, trends, sleepTimeline, feedingHistory] =
-    await Promise.all([
-      getHomeCountdown(),
-      getCarePrediction(),
-      getCareTrends(5000),
-      getSleepTimeline(3000),
-      getRecentFeedingHistory(5000)
-    ]);
+  const [
+    countdown,
+    prediction,
+    trends,
+    sleepTimeline,
+    feedingHistory,
+    diaperHistory
+  ] = await Promise.all([
+    getHomeCountdown(),
+    getCarePrediction(),
+    getCareTrends(5000),
+    getSleepTimeline(3000),
+    getRecentFeedingHistory(5000),
+    getRecentDiaperHistory(5000)
+  ]);
   const ageParts = splitAgeLabel(babyReference.ageLabel);
 
   return (
@@ -133,19 +143,12 @@ export default async function HomePage() {
       </div>
 
       <div className="hidden space-y-4 md:block xl:h-[calc(100vh-8rem)] xl:min-h-[45rem]">
-        <section className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
-          <div className="rounded-[2rem] border border-white/80 bg-white/60 p-5 shadow-2xl shadow-slate-200/50 backdrop-blur-2xl">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
-                  Today
-                </p>
-                <h1 className="apple-hello-text mt-2 text-4xl">今日预测</h1>
-              </div>
-              <span className="text-xs text-slate-500">北京时间</span>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3">
+        <section className="grid items-stretch gap-4 lg:grid-cols-[0.9fr_1.35fr]">
+          <div className="order-2 flex h-full flex-col rounded-[2rem] border border-white/80 bg-white/60 p-4 shadow-2xl shadow-slate-200/50 backdrop-blur-2xl">
+            <p className="px-1 text-xs font-medium uppercase tracking-[0.24em] text-slate-400">
+              Today
+            </p>
+            <div className="mt-2 grid min-h-0 flex-1 grid-cols-3 items-center gap-2.5">
               <PredictionPanel
                 label="下次喂养"
                 icon="🍼"
@@ -160,6 +163,7 @@ export default async function HomePage() {
                     ? "可能与睡眠重叠"
                     : `约 ${formatMinutes(prediction.feeding.intervalMinutes)} 后`
                 }
+                countdownAt={prediction.feeding.windowStartAt}
               />
               <PredictionPanel
                 label={prediction.status.isSleeping ? "预计醒来" : "预计入睡"}
@@ -176,69 +180,62 @@ export default async function HomePage() {
                     : `预计 ${formatPredictionTime(prediction.sleep.predictedEndAt)} 醒来`
                 }
                 foot={`醒窗约 ${formatMinutes(prediction.sleep.wakeWindowMinutes)}`}
+                countdownAt={
+                  prediction.status.isSleeping
+                    ? prediction.sleep.predictedEndAt
+                    : prediction.sleep.predictedStartAt
+                }
               />
               <PredictionPanel
                 label="下次尿布"
                 icon="💩"
                 tone="from-sky-100/75 to-cyan-100/75"
                 value={formatPredictionTime(prediction.diaper.nextPeeAt)}
-                detail={`今日尿 ${countdown.diaperPeeToday} 次 · 便 ${countdown.diaperPoopToday} 次`}
-                foot={`排便参考 ${prediction.diaper.nextPoopAt ? formatPredictionTime(prediction.diaper.nextPoopAt) : "继续观察"}`}
+                detail={`预计排便 ${prediction.diaper.nextPoopAt ? formatPredictionTime(prediction.diaper.nextPoopAt) : "待观察"}`}
+                countdownAt={prediction.diaper.nextPeeAt}
               />
-              <div className="flex min-h-[9rem] flex-col justify-between rounded-[1.5rem] border border-white/80 bg-gradient-to-br from-rose-50/80 to-indigo-50/80 p-4 shadow-sm ring-1 ring-white/70">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-600">
-                    今日测量
-                  </p>
-                  <span className="text-xl" aria-hidden="true">
-                    🌡️
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <MeasureStatus
-                    label="体温"
-                    measured={countdown.temperatureMeasuredToday}
-                  />
-                  <MeasureStatus
-                    label="体重"
-                    measured={countdown.weightMeasuredToday}
-                  />
-                </div>
-              </div>
             </div>
           </div>
-          <div className="relative flex min-h-52 items-center justify-center overflow-hidden rounded-[2rem] border border-white/80 bg-gradient-to-br from-sky-50/70 via-white/55 to-pink-50/70 p-6 shadow-xl shadow-slate-200/40 backdrop-blur-2xl">
-            <div className="absolute -left-12 top-1/2 h-36 w-36 -translate-y-1/2 rounded-full bg-cyan-200/25 blur-3xl" />
-            <div className="absolute -right-10 top-1/3 h-36 w-36 rounded-full bg-pink-200/25 blur-3xl" />
-            <div className="relative flex w-full items-stretch justify-center gap-5 px-2 xl:gap-7">
-              <div className="flex min-h-48 items-center justify-center border-r border-white/70 pr-5 xl:pr-7">
-                <span
-                  className="flex flex-col items-center gap-2.5 font-mono text-xl font-semibold leading-none text-slate-400"
-                  aria-label="BORN"
-                >
-                  {["B", "O", "R", "N"].map((letter) => (
-                    <span key={letter} aria-hidden="true">
-                      {letter}
-                    </span>
-                  ))}
-                </span>
-              </div>
-              <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
-                {ageParts.map((part, index) => (
-                  <div
-                    key={`${part.unit}-${index}`}
-                    className="flex min-h-48 min-w-0 flex-col items-center justify-center rounded-[1.75rem] border border-white/90 bg-white/40 px-3 py-7 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_12px_30px_rgba(148,163,184,0.12)] ring-1 ring-indigo-100/50 backdrop-blur-2xl"
+          <div className="order-1 grid h-full content-between gap-4">
+            <div className="relative flex min-h-48 items-center justify-center overflow-hidden rounded-[2rem] border border-white/80 bg-gradient-to-br from-sky-50/70 via-white/55 to-pink-50/70 p-4 shadow-xl shadow-slate-200/40 backdrop-blur-2xl">
+              <div className="absolute -left-12 top-1/2 h-28 w-28 -translate-y-1/2 rounded-full bg-cyan-200/25 blur-3xl" />
+              <div className="absolute -right-10 top-1/3 h-28 w-28 rounded-full bg-pink-200/25 blur-3xl" />
+              <div className="relative flex w-full items-stretch justify-center gap-4 px-1 xl:gap-5">
+                <div className="flex min-h-36 items-center justify-center border-r border-white/70 pr-4 xl:pr-5">
+                  <span
+                    className="flex flex-col items-center gap-1.5 font-mono text-base font-semibold leading-none text-slate-400"
+                    aria-label="BORN"
                   >
-                    <span className="font-mono text-[clamp(2.25rem,4vw,4rem)] font-medium leading-none tracking-[-0.06em] text-slate-600 tabular-nums">
-                      {part.value}
-                    </span>
-                    <span className="mt-3 text-sm font-medium tracking-[0.18em] text-slate-400">
-                      {part.unit}
-                    </span>
-                  </div>
-                ))}
+                    {["B", "O", "R", "N"].map((letter) => (
+                      <span key={letter} aria-hidden="true">
+                        {letter}
+                      </span>
+                    ))}
+                  </span>
+                </div>
+                <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
+                  {ageParts.map((part, index) => (
+                    <div
+                      key={`${part.unit}-${index}`}
+                      className="flex min-h-36 min-w-0 flex-col items-center justify-center rounded-[1.5rem] border border-white/90 bg-white/40 px-3 py-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.9),0_12px_30px_rgba(148,163,184,0.12)] ring-1 ring-indigo-100/50 backdrop-blur-2xl"
+                    >
+                      <span className="font-mono text-[clamp(2.25rem,3.6vw,3.6rem)] font-medium leading-none tracking-[-0.06em] text-slate-600 tabular-nums">
+                        {part.value}
+                      </span>
+                      <span className="mt-2 text-xs font-medium tracking-[0.16em] text-slate-400">
+                        {part.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
+            <TodayMeasurements
+              temperatureMeasuredToday={countdown.temperatureMeasuredToday}
+              weightMeasuredToday={countdown.weightMeasuredToday}
+              temperature={trends.temperature}
+              weight={trends.weight}
+            />
           </div>
         </section>
 
@@ -246,6 +243,7 @@ export default async function HomePage() {
           trends={trends}
           sleepTimeline={sleepTimeline}
           feedingHistory={feedingHistory}
+          diaperHistory={diaperHistory}
           compact
         />
       </div>
@@ -269,51 +267,39 @@ function PredictionPanel({
   tone,
   value,
   detail,
-  foot
+  foot,
+  countdownAt
 }: {
   label: string;
   icon: string;
   tone: string;
   value: string;
   detail: string;
-  foot: string;
+  foot?: string;
+  countdownAt: string | null;
 }) {
   return (
     <div
-      className={`flex min-h-[9rem] min-w-0 flex-col justify-between rounded-[1.5rem] border border-white/80 bg-gradient-to-br ${tone} p-4 shadow-sm ring-1 ring-white/70`}
+      className={`grid h-[15rem] min-w-0 grid-rows-[auto_auto_1fr_auto] overflow-hidden rounded-[1.35rem] border border-white/80 bg-gradient-to-br ${tone} p-3.5 shadow-sm ring-1 ring-white/70`}
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-slate-600">{label}</p>
-        <span className="text-xl" aria-hidden="true">
+        <span className="text-2xl leading-none" aria-hidden="true">
           {icon}
         </span>
       </div>
-      <p className="font-mono text-[clamp(1.3rem,2vw,2rem)] leading-tight tracking-tight text-slate-700 tabular-nums">
-        {value}
-      </p>
-      <div>
-        <p className="text-xs font-medium text-slate-600">{detail}</p>
-        <p className="mt-0.5 text-[11px] text-slate-500">{foot}</p>
+      <div className="mb-3 mt-4 flex min-h-[3.65rem] items-center justify-center rounded-[1rem] border border-white/85 bg-white/35 px-2 shadow-[inset_0_1px_2px_rgba(255,255,255,0.95),inset_0_-8px_24px_rgba(148,163,184,0.06)] backdrop-blur-xl">
+        <p className="whitespace-nowrap font-mono text-[clamp(1.05rem,1.55vw,1.65rem)] font-medium leading-none tracking-[-0.04em] text-slate-700 tabular-nums">
+          {value}
+        </p>
       </div>
-    </div>
-  );
-}
-
-function MeasureStatus({
-  label,
-  measured
-}: {
-  label: string;
-  measured: boolean;
-}) {
-  return (
-    <div className="rounded-2xl bg-white/65 px-3 py-2.5 ring-1 ring-white/80">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p
-        className={`mt-1 text-base font-semibold ${measured ? "text-emerald-700" : "text-slate-600"}`}
-      >
-        {measured ? "已测" : "未测"}
-      </p>
+      <div className="min-h-[2.75rem]">
+        <p className="text-xs font-medium text-slate-600">{detail}</p>
+        {foot ? (
+          <p className="mt-0.5 text-[11px] text-slate-500">{foot}</p>
+        ) : null}
+      </div>
+      <PredictionCountdown targetAt={countdownAt} />
     </div>
   );
 }

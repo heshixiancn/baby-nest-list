@@ -10,7 +10,7 @@ type Bucket = {
 };
 
 const configs = {
-  temperature: { title: "体温", unit: "℃", color: "#ec8298", fill: "#ffe1e9" },
+  temperature: { title: "体温", unit: "℃", color: "#10b981", fill: "#d1fae5" },
   weight: { title: "体重", unit: "g", color: "#778de8", fill: "#dfe6ff" }
 } as const;
 
@@ -75,7 +75,7 @@ export function DashboardMetricCard({
             {config.title}
           </h2>
           <span
-            className={`truncate font-mono text-xl tabular-nums ${headlineAbnormal ? "text-rose-600" : "text-slate-700"}`}
+            className={`truncate font-mono text-xl tabular-nums ${headlineAbnormal ? "text-rose-600" : kind === "temperature" && headline !== undefined ? "text-emerald-600" : "text-slate-700"}`}
           >
             {headline === undefined
               ? "暂无记录"

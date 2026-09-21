@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Item = {
   id: string;
@@ -34,8 +34,9 @@ export function SleepChart({
   const [selected, setSelected] = useState<string | null>(null);
   const today = dateKey(new Date());
   const segments = useMemo(() => splitDays(items), [items]);
-  const count = range === "周" ? 7 : range === "月" ? 30 : 365;
+  const count = range === "周" ? 7 : 30;
   const days = useMemo(() => aggregate(segments, count), [segments, count]);
+  const months = useMemo(() => aggregateMonths(segments), [segments]);
   const active =
     range === "日"
       ? today
@@ -45,22 +46,21 @@ export function SleepChart({
   const activeSegments = segments
     .filter((item) => item.day === active)
     .sort((a, b) => a.start.getTime() - b.start.getTime());
-  const hasData = days.some((item) => item.minutes > 0);
+  const hasData = (range === "年" ? months : days).some(
+    (item) => item.minutes > 0
+  );
+  const totalMinutes =
+    range === "日"
+      ? activeSegments.reduce((sum, item) => sum + item.minutes, 0)
+      : (range === "年" ? months : days).reduce(
+          (sum, item) => sum + item.minutes,
+          0
+        );
   return (
-    <section className="mb-4 rounded-[2rem] border border-white/80 bg-white/60 p-4 shadow-xl shadow-indigo-200/25 backdrop-blur-2xl">
+    <section className="mb-4 h-full rounded-[2rem] border border-white/80 bg-white/60 p-4 shadow-xl shadow-indigo-200/25 backdrop-blur-2xl">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h2 className="apple-hello-text text-2xl text-slate-700">睡眠节律</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {range === "日"
-              ? "今日"
-              : range === "周"
-                ? "近 7 天"
-                : range === "月"
-                  ? "近 30 天"
-                  : "近 365 天"}{" "}
-            · 北京时间
-          </p>
         </div>
         {!hideRangeSelector ? (
           <div className="flex shrink-0 rounded-full bg-white/70 p-1">
@@ -78,22 +78,35 @@ export function SleepChart({
               </button>
             ))}
           </div>
-        ) : null}
+        ) : (
+          <span className="rounded-full bg-white/75 px-3 py-1 text-sm font-semibold text-slate-600">
+            {shortDuration(totalMinutes)}
+          </span>
+        )}
       </div>
       {range === "日" ? (
-        <DayDetail key={today} day={today} items={activeSegments} />
+        <>
+          <SleepSummary minutes={totalMinutes} />
+          <DayDetail key={today} day={today} items={activeSegments} />
+        </>
       ) : (
         <>
           {!hasData ? (
             <p className="py-10 text-center text-sm text-slate-400">
               暂无该时段的睡眠记录
             </p>
-          ) : range === "周" ? (
-            <WeekBars items={days} selected={active} onSelect={setSelected} />
+          ) : range === "周" || range === "月" ? (
+            <DayBars
+              items={days}
+              selected={active}
+              onSelect={setSelected}
+              range={range}
+            />
           ) : (
-            <TrendBars items={days} />
+            <TrendBars items={months} />
           )}
-          {range === "周" ? (
+          <SleepSummary minutes={totalMinutes} />
+          {range === "周" || range === "月" ? (
             <DayDetail key={active} day={active} items={activeSegments} />
           ) : null}
         </>
@@ -102,20 +115,40 @@ export function SleepChart({
   );
 }
 
-function WeekBars({
+function SleepSummary({ minutes }: { minutes: number }) {
+  return (
+    <div className="mt-2 flex min-h-4 flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-600">
+      <span>
+        <i className="mr-1 inline-block h-2 w-2 rounded-full bg-indigo-500" />
+        睡眠总时长
+      </span>
+      <span>累计 {duration(minutes)}</span>
+    </div>
+  );
+}
+
+function DayBars({
   items,
   selected,
-  onSelect
+  onSelect,
+  range
 }: {
   items: { key: string; minutes: number }[];
   selected: string;
   onSelect: (day: string) => void;
+  range: "周" | "月";
 }) {
   const max = Math.max(...items.map((item) => item.minutes), 1);
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (range === "月" && scroller.current)
+      scroller.current.scrollLeft = scroller.current.scrollWidth;
+  }, [range]);
   return (
     <div
-      className="mt-5 grid grid-cols-7 gap-1 sm:gap-2"
-      aria-label="近七天每日睡眠时长"
+      ref={scroller}
+      className={`mt-5 gap-1 sm:gap-2 ${range === "周" ? "grid grid-cols-7" : "flex snap-x snap-mandatory overflow-x-auto pb-2"}`}
+      aria-label={`${range === "周" ? "近七天" : "近三十天"}每日睡眠时长，可选择日期查看时刻`}
     >
       {items.map((item) => (
         <button
@@ -123,12 +156,14 @@ function WeekBars({
           type="button"
           aria-pressed={selected === item.key}
           onClick={() => onSelect(item.key)}
-          className={`min-w-0 rounded-xl px-0.5 py-2 text-center transition ${selected === item.key ? "bg-indigo-100 ring-1 ring-indigo-300" : "bg-white/45 hover:bg-white/80"}`}
+          className={`rounded-xl px-0.5 py-2 text-center transition ${range === "月" ? "min-w-[3.25rem] snap-start" : "min-w-0"} ${selected === item.key ? "bg-indigo-100 ring-1 ring-indigo-300" : "bg-white/45 hover:bg-white/80"}`}
         >
-          <span className="block h-8 text-[10px] font-semibold text-slate-600 sm:text-xs">
+          <span className="block h-6 text-[10px] font-semibold text-slate-600 sm:text-xs">
             {item.minutes ? shortDuration(item.minutes) : "—"}
           </span>
-          <span className="mx-auto flex h-20 w-3 items-end rounded-full bg-indigo-100/60 sm:w-5">
+          <span
+            className={`mx-auto flex w-3 items-end rounded-full bg-indigo-100/60 sm:w-5 ${range === "周" ? "h-20" : "h-14"}`}
+          >
             <span
               className="w-full rounded-full bg-gradient-to-t from-indigo-500 to-cyan-300"
               style={{
@@ -208,8 +243,18 @@ function DayDetail({ day, items }: { day: string; items: Segment[] }) {
 function TrendBars({ items }: { items: { key: string; minutes: number }[] }) {
   const max = Math.max(...items.map((item) => item.minutes), 1);
   return (
-    <>
-      <div className="mt-5 flex h-28 items-end gap-1 border-b border-indigo-100">
+    <div
+      className="mt-5 grid grid-cols-12 gap-1"
+      aria-label="近十二个月每月睡眠总时长"
+    >
+      {items.map((item) => (
+        <div key={`${item.key}-value`} className="min-w-0 text-center">
+          <span className="block truncate text-[9px] font-semibold text-slate-500">
+            {item.minutes ? shortMonthDuration(item.minutes) : "—"}
+          </span>
+        </div>
+      ))}
+      <div className="col-span-12 flex h-28 items-end gap-1 border-b border-indigo-100">
         {items.map((item) => (
           <div key={item.key} className="flex h-full flex-1 items-end">
             <div
@@ -217,17 +262,38 @@ function TrendBars({ items }: { items: { key: string; minutes: number }[] }) {
               style={{
                 height: `${item.minutes ? Math.max(4, (item.minutes / max) * 100) : 0}%`
               }}
-              title={`${item.key} · ${duration(item.minutes)}`}
+              title={`${item.key} · 累计 ${duration(item.minutes)}`}
             />
           </div>
         ))}
       </div>
-      <div className="mt-2 flex justify-between text-[10px] text-slate-400">
-        <span>{items[0]?.key}</span>
-        <span>{items.at(-1)?.key}</span>
-      </div>
-    </>
+      {items.map((item) => (
+        <span
+          key={`${item.key}-label`}
+          className="truncate text-center text-[9px] text-slate-400"
+        >
+          {item.key.slice(5)}月
+        </span>
+      ))}
+    </div>
   );
+}
+function aggregateMonths(items: Segment[]) {
+  const now = new Date();
+  const currentKey = dateKey(now).slice(0, 7);
+  const [currentYear, currentMonth] = currentKey.split("-").map(Number);
+  const result = Array.from({ length: 12 }, (_, index) => {
+    const offset = index - 11;
+    const date = new Date(Date.UTC(currentYear, currentMonth - 1 + offset, 1));
+    const key = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+    return { key, minutes: 0 };
+  });
+  const map = new Map(result.map((item) => [item.key, item]));
+  for (const item of items) {
+    const bucket = map.get(item.day.slice(0, 7));
+    if (bucket) bucket.minutes += item.minutes;
+  }
+  return result;
 }
 function aggregate(items: Segment[], count: number) {
   const result = Array.from({ length: count }, (_, index) => ({
@@ -281,6 +347,12 @@ function shortDuration(minutes: number) {
   return minutes >= 60
     ? `${Number((minutes / 60).toFixed(1))}h`
     : `${Math.round(minutes)}m`;
+}
+function shortMonthDuration(minutes: number) {
+  const hours = minutes / 60;
+  return hours >= 1000
+    ? `${Number((hours / 1000).toFixed(1))}k h`
+    : `${Math.round(hours)}h`;
 }
 function dateKey(date: Date) {
   return new Intl.DateTimeFormat("en-CA", {

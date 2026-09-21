@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { SleepChart } from "@/components/SleepChart";
 import type { SleepRange } from "@/components/SleepChart";
-import { DashboardMetricCard } from "@/components/DashboardMetricCard";
 import { DashboardFeedingCard } from "@/components/DashboardFeedingCard";
+import { DashboardDiaperCard } from "@/components/DashboardDiaperCard";
 
 type TrendPoint = {
   time: string;
@@ -33,6 +33,11 @@ type FeedingHistoryItem = {
   feedingType: string;
   amountMl: number | null;
   durationMinutes: number | null;
+};
+
+type DiaperHistoryItem = {
+  happenedAt: string;
+  diaperType: string;
 };
 
 const cards = [
@@ -66,11 +71,13 @@ export function CareTrendsDashboard({
   trends,
   sleepTimeline = [],
   feedingHistory = [],
+  diaperHistory = [],
   compact = false
 }: {
   trends: Trends;
   sleepTimeline?: SleepTimelineItem[];
   feedingHistory?: FeedingHistoryItem[];
+  diaperHistory?: DiaperHistoryItem[];
   compact?: boolean;
 }) {
   const [dashboardRange, setDashboardRange] = useState<SleepRange>("日");
@@ -87,9 +94,7 @@ export function CareTrendsDashboard({
     return (
       <section className="space-y-3">
         <div className="flex items-center justify-between gap-3 rounded-full border border-white/80 bg-white/55 px-4 py-2 backdrop-blur-xl">
-          <span className="text-sm font-medium text-slate-600">
-            照护趋势 · 北京时间
-          </span>
+          <span className="text-sm font-medium text-slate-600">照护趋势</span>
           <div
             className="flex rounded-full bg-white/75 p-1"
             role="group"
@@ -108,20 +113,11 @@ export function CareTrendsDashboard({
             ))}
           </div>
         </div>
-        <div className="grid min-h-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-          <section className="grid min-h-0 gap-3" aria-label="近期照护趋势">
+        <div className="grid min-h-0 items-stretch gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+          <section className="min-h-0 h-full" aria-label="近期喂养趋势">
             <DashboardFeedingCard
+              key={dashboardRange}
               items={feedingHistory}
-              range={dashboardRange}
-            />
-            <DashboardMetricCard
-              kind="temperature"
-              points={trends.temperature}
-              range={dashboardRange}
-            />
-            <DashboardMetricCard
-              kind="weight"
-              points={trends.weight}
               range={dashboardRange}
             />
           </section>
@@ -131,6 +127,16 @@ export function CareTrendsDashboard({
             selectedRange={dashboardRange}
             hideRangeSelector
           />
+          <section
+            className="min-h-0 h-full lg:col-span-2 2xl:col-span-1"
+            aria-label="近期尿布趋势"
+          >
+            <DashboardDiaperCard
+              key={dashboardRange}
+              items={diaperHistory}
+              range={dashboardRange}
+            />
+          </section>
         </div>
       </section>
     );

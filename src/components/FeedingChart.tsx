@@ -40,7 +40,7 @@ export function FeedingChart({ items }: { items: FeedingItem[] }) {
       ? selectedDay
       : dateKey(new Date());
   const dayRecords =
-    range === "周"
+    range === "周" || range === "月"
       ? visible
           .filter((item) => dateKey(new Date(item.happenedAt)) === activeDay)
           .sort(
@@ -140,7 +140,7 @@ export function FeedingChart({ items }: { items: FeedingItem[] }) {
         </div>
       )}
 
-      {range === "周" ? (
+      {range === "周" || range === "月" ? (
         <div className="mt-3 rounded-2xl bg-white/50 p-3">
           <div className="grid grid-cols-7 gap-1">
             {buckets.map((bucket) => (
@@ -207,8 +207,11 @@ function Summary({ label, value }: { label: string; value: string }) {
 function filterItems(items: FeedingItem[], range: Range) {
   const now = Date.now();
   const today = dateKey(new Date(now));
-  const days = range === "周" ? 7 : range === "月" ? 30 : 365;
-  const firstDay = dateKey(new Date(now - (days - 1) * 86400000));
+  const days = range === "周" ? 7 : 30;
+  const firstDay =
+    range === "年"
+      ? monthKeyMonthsAgo(11) + "-01"
+      : dateKey(new Date(now - (days - 1) * 86400000));
   return items.filter((item) => {
     const time = new Date(item.happenedAt).getTime();
     if (!Number.isFinite(time) || time > now + 60000) return false;
@@ -218,7 +221,7 @@ function filterItems(items: FeedingItem[], range: Range) {
 }
 function buildBuckets(items: FeedingItem[], range: Range) {
   const count =
-    range === "日" ? 12 : range === "周" ? 7 : range === "月" ? 15 : 12;
+    range === "日" ? 12 : range === "周" ? 7 : range === "月" ? 30 : 12;
   const now = new Date();
   const result = Array.from({ length: count }, (_, index) => {
     if (range === "日")
@@ -230,23 +233,16 @@ function buildBuckets(items: FeedingItem[], range: Range) {
         formula: 0
       };
     if (range === "年") {
-      const date = new Date(
-        now.getFullYear(),
-        now.getMonth() - (count - 1 - index),
-        1
-      );
+      const key = monthKeyMonthsAgo(count - 1 - index);
       return {
-        key: `${date.getFullYear()}-${date.getMonth()}`,
-        label: `${date.getMonth() + 1}月`,
+        key,
+        label: `${Number(key.slice(5))}月`,
         breast: 0,
         bottle: 0,
         formula: 0
       };
     }
-    const step = range === "月" ? 2 : 1;
-    const date = new Date(
-      now.getTime() - (count - 1 - index) * step * 86400000
-    );
+    const date = new Date(now.getTime() - (count - 1 - index) * 86400000);
     return {
       key: dateKey(date),
       label: `${date.getMonth() + 1}/${date.getDate()}`,
@@ -261,14 +257,8 @@ function buildBuckets(items: FeedingItem[], range: Range) {
     let key: string;
     if (range === "日")
       key = String(Math.min(11, Math.floor(hourInZone(date) / 2)));
-    else if (range === "年") key = `${date.getFullYear()}-${date.getMonth()}`;
-    else if (range === "月") {
-      const diff = Math.floor(
-        (startOfToday().getTime() - startOfDay(date).getTime()) / 86400000
-      );
-      const index = count - 1 - Math.floor(Math.max(0, diff) / 2);
-      key = result[Math.max(0, Math.min(count - 1, index))]?.key ?? "";
-    } else key = dateKey(date);
+    else if (range === "年") key = dateKey(date).slice(0, 7);
+    else key = dateKey(date);
     const bucket = map.get(key);
     if (!bucket) continue;
     if (item.feedingType === "母乳") bucket.breast += 1;
@@ -276,6 +266,12 @@ function buildBuckets(items: FeedingItem[], range: Range) {
     else if (item.feedingType === "配方奶") bucket.formula += 1;
   }
   return result;
+}
+function monthKeyMonthsAgo(offset: number) {
+  const today = dateKey(new Date());
+  const [year, month] = today.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1 - offset, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 function dateKey(date: Date) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -301,12 +297,6 @@ function hourInZone(date: Date) {
       hourCycle: "h23"
     }).format(date)
   );
-}
-function startOfToday() {
-  return startOfDay(new Date());
-}
-function startOfDay(date: Date) {
-  return new Date(`${dateKey(date)}T00:00:00+08:00`);
 }
 function formatMinutes(minutes: number) {
   const rounded = Math.round(minutes);

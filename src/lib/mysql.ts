@@ -1154,7 +1154,7 @@ export async function getTodayDiaperSummary() {
 
 export async function getRecentDiaperHistory(limit = 40) {
   if (!hasCompleteMysqlConfig()) return [];
-  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 1000);
+  const safeLimit = Math.min(Math.max(Math.floor(limit), 1), 5000);
   const [rows] = await getPool().query<DiaperHistoryRow[]>(
     `select happened_at, diaper_type
      from diaper_records
