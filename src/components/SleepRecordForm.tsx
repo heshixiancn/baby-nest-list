@@ -86,24 +86,6 @@ export function SleepRecordForm({
     if (saved) setShowWakePicker(false);
   }
 
-  async function handlePause() {
-    if (!openSleep) return;
-    await saveSleep({
-      action: "pause",
-      id: openSleep.id,
-      pauseStartedAt: currentDatetimeLocalValue()
-    });
-  }
-
-  async function handleResume() {
-    if (!openSleep) return;
-    await saveSleep({
-      action: "resume",
-      id: openSleep.id,
-      resumedAt: currentDatetimeLocalValue()
-    });
-  }
-
   async function handleManualSave() {
     if (!manualDuration || manualDuration < 1) {
       setError("结束时间要晚于开始时间。");
@@ -154,11 +136,7 @@ export function SleepRecordForm({
       setMessage(
         payload.action === "finish" && result.durationMinutes
           ? `已记录：${formatDuration(result.durationMinutes)}`
-          : payload.action === "pause"
-            ? "已标记暂醒"
-            : payload.action === "resume"
-              ? `已继续睡眠，暂醒 ${result.awakeMinutes ?? 0} 分钟`
-              : "已记录"
+          : "已记录"
       );
       setLastSubmit({ key: submitKey, savedAt: Date.now() });
       setNote("");
@@ -225,16 +203,12 @@ export function SleepRecordForm({
               <div className="relative z-10">
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-xs font-medium text-slate-500">
-                    {openSleep?.pauseStartedAt
-                      ? "暂醒观察"
-                      : openSleep
-                        ? "正在睡眠"
-                        : "睡眠计时"}
+                    {openSleep ? "正在睡眠" : "睡眠计时"}
                   </p>
                   {openSleep ? (
                     <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-indigo-700 ring-1 ring-white/80">
                       <span className="h-2 w-2 rounded-full bg-indigo-400 timer-live-dot" />
-                      {openSleep.pauseStartedAt ? "暂醒中" : "计时中"}
+                      计时中
                     </span>
                   ) : null}
                 </div>
@@ -245,77 +219,43 @@ export function SleepRecordForm({
                 </p>
                 <p className="mt-1 text-center text-xs text-slate-500">
                   {openSleep
-                    ? openSleep.pauseStartedAt
-                      ? `暂醒 ${formatTimerFromIso(
-                          openSleep.pauseStartedAt,
-                          now
-                        )} · 可继续或确认醒了`
-                      : `${formatTime(openSleep.startedAt)} 开始`
+                    ? `${formatTime(openSleep.startedAt)} 开始`
                     : "默认从当前时间开始，也可以先改上方开始时间。"}
                 </p>
-                {openSleep?.awakeMinutes ? (
-                  <p className="mt-1 text-center text-xs text-slate-400">
-                    已累计暂醒 {openSleep.awakeMinutes} 分钟
-                  </p>
-                ) : null}
               </div>
-              {openSleep ? (
-                <div className="relative z-10 mt-3 text-left">
-                  <RecordTimePicker
-                    label="结束时间"
-                    value={endedAt}
-                    onChange={(value) => {
-                      setEndedAtTouched(true);
-                      setEndedAt(value);
-                    }}
-                  />
-                </div>
-              ) : null}
               <div className="relative z-10 mt-5 flex justify-center">
                 <button
                   className={`record-round-action record-round-action-large ${
                     openSleep ? "record-round-action-stop" : ""
                   }`}
                   type="button"
-                  onClick={
+                  onClick={() =>
                     openSleep
-                      ? openSleep.pauseStartedAt
-                        ? handleResume
-                        : handlePause
-                      : handleStart
+                      ? void handleFinish(currentDatetimeLocalValue())
+                      : void handleStart()
                   }
                   disabled={saving}
                 >
                   <span className="text-3xl" aria-hidden="true">
-                    {openSleep?.pauseStartedAt ? "↺" : openSleep ? "Ⅱ" : "▶"}
+                    {openSleep ? "✓" : "▶"}
                   </span>
                   <span className="mt-1.5 text-sm">
-                    {openSleep?.pauseStartedAt
-                      ? "继续"
-                      : openSleep
-                        ? "暂醒"
-                        : "开始"}
+                    {openSleep ? "结束" : "开始"}
                   </span>
                 </button>
               </div>
-              {openSleep?.pauseStartedAt ? (
+              {openSleep ? (
                 <button
-                  className="record-accent-button relative z-10 mt-3 h-11 w-full rounded-full text-sm font-medium"
+                  className="record-soft-button relative z-10 mt-3 h-11 w-full rounded-full text-sm font-medium"
                   type="button"
-                  onClick={() => void handleFinish()}
+                  onClick={() => {
+                    setEndedAt(currentDatetimeLocalValue());
+                    setEndedAtTouched(false);
+                    setShowWakePicker(true);
+                  }}
                   disabled={saving}
                 >
-                  确认醒了
-                </button>
-              ) : null}
-              {openSleep && !openSleep.pauseStartedAt ? (
-                <button
-                  className="record-accent-button relative z-10 mt-3 h-11 w-full rounded-full text-sm font-medium"
-                  type="button"
-                  onClick={() => setShowWakePicker(true)}
-                  disabled={saving}
-                >
-                  醒了 · 补记睡醒时间
+                  补记其他睡醒时间
                 </button>
               ) : null}
             </div>
