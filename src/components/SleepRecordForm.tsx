@@ -229,11 +229,15 @@ export function SleepRecordForm({
                     openSleep ? "record-round-action-stop" : ""
                   }`}
                   type="button"
-                  onClick={() =>
-                    openSleep
-                      ? void handleFinish(currentDatetimeLocalValue())
-                      : void handleStart()
-                  }
+                  onClick={() => {
+                    if (!openSleep) {
+                      void handleStart();
+                      return;
+                    }
+                    setEndedAt(currentDatetimeLocalValue());
+                    setEndedAtTouched(false);
+                    setShowWakePicker(true);
+                  }}
                   disabled={saving}
                 >
                   <span className="text-3xl" aria-hidden="true">
@@ -244,20 +248,6 @@ export function SleepRecordForm({
                   </span>
                 </button>
               </div>
-              {openSleep ? (
-                <button
-                  className="record-soft-button relative z-10 mt-3 h-11 w-full rounded-full text-sm font-medium"
-                  type="button"
-                  onClick={() => {
-                    setEndedAt(currentDatetimeLocalValue());
-                    setEndedAtTouched(false);
-                    setShowWakePicker(true);
-                  }}
-                  disabled={saving}
-                >
-                  补记其他睡醒时间
-                </button>
-              ) : null}
             </div>
           </div>
 
