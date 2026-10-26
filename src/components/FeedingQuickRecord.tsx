@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { currentDatetimeLocalValue } from "@/lib/time-input";
 import type { FeedingRecommendation } from "@/lib/feeding-recommendation";
 import { RecordTimePicker } from "@/components/RecordTimePicker";
@@ -9,21 +9,15 @@ import { ViewRecordsButton } from "@/components/ViewRecordsButton";
 
 type RecordMode = "feeding" | "diaper";
 type FeedingType = "母乳" | "瓶喂" | "配方奶";
-type DiaperType = "尿" | "便" | "尿+便";
+type DiaperType = "尿" | "便" | "尿+便" | "换尿不湿";
 
 const feedingTypes: FeedingType[] = ["瓶喂", "母乳", "配方奶"];
-const diaperTypes: DiaperType[] = ["尿", "便", "尿+便"];
+const diaperTypes: DiaperType[] = ["换尿不湿", "尿", "便", "尿+便"];
 const milkSteps = [30, 60, 90, 120, 150];
 const minuteWheelValues = [
   ...Array.from({ length: 60 }, (_, index) => index + 1),
   ...Array.from({ length: 24 }, (_, index) => 65 + index * 5)
 ];
-
-type OpenBreastfeeding = {
-  id: string;
-  startedAt: string;
-  side: string;
-};
 
 type PendingWake = {
   sleepId: string;
@@ -50,10 +44,8 @@ export function FeedingQuickRecord({
     } as FeedingRecommendation);
   const [mode, setMode] = useState<RecordMode>(initialMode);
   const [recordedAt, setRecordedAt] = useState(currentDatetimeLocalValue);
-  const [endedAt, setEndedAt] = useState(currentDatetimeLocalValue);
-  const [endedAtTouched, setEndedAtTouched] = useState(false);
   const [feedingType, setFeedingType] = useState<FeedingType>("瓶喂");
-  const [diaperType, setDiaperType] = useState<DiaperType>("尿");
+  const [diaperType, setDiaperType] = useState<DiaperType>("换尿不湿");
   const [minutes, setMinutes] = useState(10);
   const [amountMl, setAmountMl] = useState(effectiveRecommendation.targetMl);
   const [side, setSide] = useState("左");
@@ -66,63 +58,14 @@ export function FeedingQuickRecord({
     key: string;
     savedAt: number;
   } | null>(null);
-  const [openBreastfeeding, setOpenBreastfeeding] =
-    useState<OpenBreastfeeding | null>(null);
   const [pendingWake, setPendingWake] = useState<PendingWake | null>(null);
   const [wakeAt, setWakeAt] = useState("");
   const pendingCareAction = useRef<null | (() => Promise<void>)>(null);
-  const [now, setNow] = useState(() => new Date());
-
-  useEffect(() => {
-    let ignore = false;
-    fetch("/api/care/feeding")
-      .then((response) => response.json())
-      .then((payload: { openBreastfeeding?: OpenBreastfeeding | null }) => {
-        if (!ignore) setOpenBreastfeeding(payload.openBreastfeeding ?? null);
-      })
-      .catch(() => undefined);
-
-    const timer = window.setInterval(() => setNow(new Date()), 1000);
-    return () => {
-      ignore = true;
-      window.clearInterval(timer);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!openBreastfeeding || endedAtTouched) return;
-    const timer = window.setInterval(
-      () => setEndedAt(currentDatetimeLocalValue()),
-      1000
-    );
-    return () => window.clearInterval(timer);
-  }, [endedAtTouched, openBreastfeeding]);
-
   const summary = useMemo(() => {
     if (mode === "diaper") return `${diaperType}`;
-    if (feedingType === "母乳") {
-      if (openBreastfeeding) {
-        return `母乳${openBreastfeeding.side || side}侧 · 已开始 ${formatDuration(
-          openBreastfeeding.startedAt,
-          now
-        )}`;
-      }
-      return `母乳${side}侧 · 待开始`;
-    }
+    if (feedingType === "母乳") return `母乳${side}侧 · ${minutes} 分钟`;
     return `${feedingType} · ${amountMl} ml`;
-  }, [amountMl, diaperType, feedingType, mode, now, openBreastfeeding, side]);
-
-  async function refreshOpenBreastfeeding() {
-    const response = await fetch("/api/care/feeding");
-    const payload = (await response.json()) as {
-      openBreastfeeding?: OpenBreastfeeding | null;
-      error?: string;
-    };
-    if (!response.ok)
-      throw new Error(payload.error || "读取母乳喂养状态失败。");
-    setOpenBreastfeeding(payload.openBreastfeeding ?? null);
-    return payload.openBreastfeeding ?? null;
-  }
+  }, [amountMl, diaperType, feedingType, minutes, mode, side]);
 
   async function checkSleepBeforeCare(
     action: () => Promise<void>,
@@ -203,90 +146,6 @@ export function FeedingQuickRecord({
     await action();
   }
 
-  async function handleStartBreastfeeding() {
-    if (saving) return;
-    setError("");
-    setSavedHint("");
-    setSaving(true);
-
-    try {
-      const existing = await refreshOpenBreastfeeding();
-      if (existing) {
-        setSavedHint("已有正在进行的母乳喂养。");
-        return;
-      }
-
-      const startedAt = recordedAt || currentDatetimeLocalValue();
-      const response = await fetch("/api/care/feeding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "start",
-          feedingType: "母乳",
-          happenedAt: startedAt,
-          side,
-          note
-        })
-      });
-      const payload = (await response.json()) as {
-        id?: string;
-        error?: string;
-      };
-      if (!response.ok || !payload.id)
-        throw new Error(payload.error || "开始记录失败。");
-
-      await refreshOpenBreastfeeding();
-      setRecordedAt(startedAt);
-      setSavedHint(`已开始：母乳${side}侧`);
-      window.setTimeout(() => setSavedHint(""), 2200);
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "开始记录失败。"
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleFinishBreastfeeding() {
-    if (saving) return;
-    setError("");
-    setSavedHint("");
-    setSaving(true);
-
-    try {
-      if (!openBreastfeeding) throw new Error("还没有开始母乳喂养。");
-      const response = await fetch("/api/care/feeding", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "finish",
-          id: openBreastfeeding.id,
-          endedAt: endedAt || currentDatetimeLocalValue(),
-          note
-        })
-      });
-      const payload = (await response.json()) as {
-        durationMinutes?: number;
-        error?: string;
-      };
-      if (!response.ok) throw new Error(payload.error || "结束母乳喂养失败。");
-
-      setOpenBreastfeeding(null);
-      setEndedAtTouched(false);
-      setEndedAt(currentDatetimeLocalValue());
-      setNote("");
-      setSavedHint(`已记录：母乳 ${payload.durationMinutes ?? 0} 分钟`);
-      window.setTimeout(() => setSavedHint(""), 2400);
-    } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "结束母乳喂养失败。"
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function handleSave() {
     if (saving) return;
     const submitKey = makeSubmitKey({
@@ -295,6 +154,7 @@ export function FeedingQuickRecord({
       feedingType,
       diaperType,
       amountMl,
+      minutes,
       side,
       stoolColor,
       note
@@ -335,7 +195,7 @@ export function FeedingQuickRecord({
               : {
                   diaperType,
                   happenedAt: recordedAt,
-                  stoolColor,
+                  stoolColor: diaperType.includes("便") ? stoolColor : "",
                   note
                 }
           )
@@ -375,7 +235,7 @@ export function FeedingQuickRecord({
 
         <RecordTimePicker
           label={
-            mode === "feeding" && feedingType === "母乳" && !openBreastfeeding
+            mode === "feeding" && feedingType === "母乳"
               ? "开始时间"
               : "记录时间"
           }
@@ -398,95 +258,18 @@ export function FeedingQuickRecord({
                   value={side}
                   onChange={setSide}
                 />
-                <div
-                  className={`relative overflow-hidden rounded-[1.65rem] border border-white/80 bg-white/55 p-3 shadow-sm backdrop-blur-2xl ${
-                    openBreastfeeding ? "breastfeeding-timer-active" : ""
-                  }`}
-                >
-                  <div className="relative z-10">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-medium text-slate-500">
-                        {openBreastfeeding ? "正在母乳喂养" : "母乳计时"}
-                      </p>
-                      {openBreastfeeding ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-white/70 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-white/80">
-                          <span className="h-2 w-2 rounded-full bg-emerald-400 timer-live-dot" />
-                          计时中
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="apple-hello-text mt-2 text-center text-[2.8rem] tabular-nums tracking-[-0.06em]">
-                      {openBreastfeeding
-                        ? formatTimer(openBreastfeeding.startedAt, now)
-                        : "00:00"}
-                    </p>
-                    <p className="mt-1 text-center text-xs text-slate-500">
-                      {openBreastfeeding
-                        ? `${formatClock(
-                            openBreastfeeding.startedAt
-                          )} 开始 · ${openBreastfeeding.side || side}侧`
-                        : "可先改上方开始时间"}
-                    </p>
-                  </div>
-                  {openBreastfeeding ? (
-                    <div className="relative z-10 mt-3 text-left">
-                      <RecordTimePicker
-                        label="结束时间"
-                        value={endedAt}
-                        onChange={(value) => {
-                          setEndedAtTouched(true);
-                          setEndedAt(value);
-                        }}
-                      />
-                    </div>
-                  ) : null}
-                  <div className="mt-3 flex justify-center">
-                    <button
-                      className={`record-round-action record-round-action-feeding ${
-                        openBreastfeeding ? "record-round-action-stop" : ""
-                      }`}
-                      type="button"
-                      onClick={() =>
-                        void (openBreastfeeding
-                          ? checkSleepBeforeCare(
-                              handleFinishBreastfeeding,
-                              endedAt || currentDatetimeLocalValue(),
-                              "feeding"
-                            )
-                          : checkSleepBeforeCare(
-                              handleStartBreastfeeding,
-                              recordedAt || currentDatetimeLocalValue(),
-                              "feeding"
-                            ))
-                      }
-                      disabled={saving}
-                    >
-                      <span
-                        className="text-2xl leading-none"
-                        aria-hidden="true"
-                      >
-                        {openBreastfeeding ? "✓" : "▶"}
-                      </span>
-                      <span className="mt-1.5 text-sm">
-                        {openBreastfeeding ? "结束" : "开始"}
-                      </span>
-                    </button>
-                  </div>
+                <div className="rounded-[1.5rem] bg-white/35 p-3 ring-1 ring-white/60">
+                  <Stepper
+                    label="喂养时长"
+                    value={`${minutes} 分钟`}
+                    unit="分钟"
+                    values={minuteWheelValues}
+                    onChange={setMinutes}
+                  />
+                  <p className="mt-2 text-center text-xs text-slate-400">
+                    结束时间将根据开始时间和喂养时长自动计算
+                  </p>
                 </div>
-                <details className="rounded-[1.5rem] bg-white/35 px-3 py-1.5 text-sm text-slate-500 ring-1 ring-white/60">
-                  <summary className="cursor-pointer list-none font-medium">
-                    补录母乳时长
-                  </summary>
-                  <div className="mt-3">
-                    <Stepper
-                      label="时长"
-                      value={`${minutes} 分钟`}
-                      unit="分钟"
-                      values={minuteWheelValues}
-                      onChange={setMinutes}
-                    />
-                  </div>
-                </details>
               </>
             ) : (
               <>
@@ -514,11 +297,13 @@ export function FeedingQuickRecord({
               value={diaperType}
               onChange={setDiaperType}
             />
-            <ButtonGrid
-              options={["黄色", "绿色", "棕色", "黑色"]}
-              value={stoolColor}
-              onChange={setStoolColor}
-            />
+            {diaperType.includes("便") ? (
+              <ButtonGrid
+                options={["黄色", "绿色", "棕色", "黑色"]}
+                value={stoolColor}
+                onChange={setStoolColor}
+              />
+            ) : null}
           </div>
         )}
 
@@ -546,33 +331,15 @@ export function FeedingQuickRecord({
             className="record-primary-button flex h-12 w-[48%]"
             type="button"
             onClick={() =>
-              void (mode === "feeding" && feedingType === "母乳"
-              ? openBreastfeeding
-                ? checkSleepBeforeCare(
-                    handleFinishBreastfeeding,
-                    endedAt || currentDatetimeLocalValue(),
-                    "feeding"
-                  )
-                  : checkSleepBeforeCare(
-                      handleStartBreastfeeding,
-                      recordedAt || currentDatetimeLocalValue(),
-                      "feeding"
-                    )
-                : checkSleepBeforeCare(
-                    handleSave,
-                    recordedAt || currentDatetimeLocalValue(),
-                    mode
-                  ))
+              void checkSleepBeforeCare(
+                handleSave,
+                recordedAt || currentDatetimeLocalValue(),
+                mode
+              )
             }
             disabled={saving}
           >
-            {saving
-              ? "处理中..."
-              : mode === "feeding" && feedingType === "母乳"
-                ? openBreastfeeding
-                  ? "结束喂奶"
-                  : "开始喂奶"
-                : "立即记录"}
+            {saving ? "处理中..." : "立即记录"}
           </button>
         </div>
       </div>
@@ -748,34 +515,6 @@ function Stepper({
       />
     </div>
   );
-}
-
-function formatDuration(startedAt: string, now: Date) {
-  const started = new Date(startedAt);
-  const diffMinutes = Math.max(
-    0,
-    Math.floor((now.getTime() - started.getTime()) / 60000)
-  );
-  if (diffMinutes < 60) return `${diffMinutes} 分钟`;
-  const hours = Math.floor(diffMinutes / 60);
-  const minutes = diffMinutes % 60;
-  return `${hours} 小时 ${minutes} 分钟`;
-}
-
-function formatTimer(startedAt: string, now: Date) {
-  const started = new Date(startedAt);
-  const diffSeconds = Math.max(
-    0,
-    Math.floor((now.getTime() - started.getTime()) / 1000)
-  );
-  const hours = Math.floor(diffSeconds / 3600);
-  const minutes = Math.floor((diffSeconds % 3600) / 60);
-  const seconds = diffSeconds % 60;
-  const minuteText = String(minutes).padStart(2, "0");
-  const secondText = String(seconds).padStart(2, "0");
-
-  if (hours > 0) return `${hours}:${minuteText}:${secondText}`;
-  return `${minuteText}:${secondText}`;
 }
 
 function formatClock(iso: string) {

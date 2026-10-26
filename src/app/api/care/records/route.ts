@@ -92,7 +92,7 @@ export async function PATCH(request: Request) {
     }
     if (
       body.type === "diaper" &&
-      !["尿", "便", "尿+便"].includes(body.diaperType ?? "")
+      !["尿", "便", "尿+便", "换尿不湿"].includes(body.diaperType ?? "")
     )
       return NextResponse.json(
         { error: "请选择有效的尿布类型。" },

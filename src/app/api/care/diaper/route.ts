@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createDiaperRecord } from "@/lib/mysql";
 
-const diaperTypes = ["尿", "便", "尿+便"] as const;
+const diaperTypes = ["尿", "便", "尿+便", "换尿不湿"] as const;
 
 export async function POST(request: Request) {
   try {

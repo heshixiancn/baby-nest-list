@@ -1042,7 +1042,9 @@ export async function updateCareRecord(input: CareRecordEdit) {
       params = {
         ...common,
         diaperType: input.diaperType ?? "",
-        stoolColor: input.diaperType === "尿" ? "" : (input.stoolColor ?? "")
+        stoolColor: input.diaperType?.includes("便")
+          ? (input.stoolColor ?? "")
+          : ""
       };
       break;
     case "temperature":

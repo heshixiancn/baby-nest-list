@@ -13,6 +13,7 @@ type Bucket = {
   label: string;
   pee: number;
   poop: number;
+  changes: number;
 };
 
 const dayMs = 86_400_000;
@@ -44,7 +45,11 @@ export function DashboardDiaperCard({
     );
   const pee = records.filter((item) => hasPee(item.diaperType)).length;
   const poop = records.filter((item) => hasPoop(item.diaperType)).length;
-  const max = Math.max(1, ...buckets.map((bucket) => bucket.pee + bucket.poop));
+  const changes = records.filter((item) => isChange(item.diaperType)).length;
+  const max = Math.max(
+    1,
+    ...buckets.map((bucket) => bucket.pee + bucket.poop + bucket.changes)
+  );
 
   return (
     <article className="mb-4 h-full min-w-0 rounded-[2rem] border border-white/80 bg-white/60 p-4 shadow-xl shadow-sky-200/25 backdrop-blur-2xl">
@@ -53,7 +58,7 @@ export function DashboardDiaperCard({
           <h2 className="apple-hello-text text-2xl text-slate-700">尿布节律</h2>
         </div>
         <span className="rounded-full bg-white/75 px-3 py-1 text-sm font-semibold text-slate-600">
-          尿 {pee} · 便 {poop}
+          换 {changes} · 尿 {pee} · 便 {poop}
         </span>
       </div>
 
@@ -76,6 +81,10 @@ export function DashboardDiaperCard({
             <span>
               <i className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-300" />
               排便 {poop} 次
+            </span>
+            <span>
+              <i className="mr-1 inline-block h-2 w-2 rounded-full bg-violet-300" />
+              更换 {changes} 次
             </span>
           </div>
           {range !== "年" ? (
@@ -117,7 +126,7 @@ function DiaperBars({
       aria-label={`尿布${range}视图，可选择日期查看当天记录时刻`}
     >
       {buckets.map((bucket) => {
-        const total = bucket.pee + bucket.poop;
+        const total = bucket.pee + bucket.poop + bucket.changes;
         const selected = range !== "年" && activeDay === bucket.key;
         return (
           <button
@@ -126,7 +135,7 @@ function DiaperBars({
             disabled={range === "年"}
             onClick={() => onSelect(bucket.key)}
             aria-pressed={selected}
-            aria-label={`${bucket.label}：排尿${bucket.pee}次，排便${bucket.poop}次`}
+            aria-label={`${bucket.label}：更换${bucket.changes}次，排尿${bucket.pee}次，排便${bucket.poop}次`}
             className={`rounded-xl px-0.5 py-2 text-center transition ${isMonth ? "min-w-[3.25rem] snap-start" : "min-w-0"} ${selected ? "bg-indigo-100 ring-1 ring-indigo-300" : "bg-white/45 hover:bg-white/80"}`}
           >
             <span className="block h-6 text-[10px] font-semibold text-slate-600 sm:text-xs">
@@ -142,6 +151,10 @@ function DiaperBars({
               <span
                 className="w-full bg-amber-300"
                 style={{ height: `${(bucket.poop / max) * 100}%` }}
+              />
+              <span
+                className="w-full bg-violet-300"
+                style={{ height: `${(bucket.changes / max) * 100}%` }}
               />
             </span>
             <span className="mt-2 block truncate text-[9px] text-slate-500 sm:text-[10px]">
@@ -171,8 +184,9 @@ function DiaperDayDetail({ day, items }: { day: string; items: DiaperItem[] }) {
             {items.map((item, index) => {
               const time = new Date(item.happenedAt);
               const left = (minutesOfDay(time) / 1440) * 100;
-              const tone =
-                hasPee(item.diaperType) && hasPoop(item.diaperType)
+              const tone = isChange(item.diaperType)
+                ? "bg-violet-300"
+                : hasPee(item.diaperType) && hasPoop(item.diaperType)
                   ? "bg-gradient-to-b from-cyan-300 to-amber-300"
                   : hasPoop(item.diaperType)
                     ? "bg-amber-300"
@@ -227,7 +241,8 @@ function groupDiapers(items: DiaperItem[], range: SleepRange) {
     key,
     label,
     pee: 0,
-    poop: 0
+    poop: 0,
+    changes: 0
   });
   if (range === "日") {
     for (let index = 0; index < 12; index++) {
@@ -266,6 +281,7 @@ function groupDiapers(items: DiaperItem[], range: SleepRange) {
     if (!bucket) continue;
     if (hasPee(record.diaperType)) bucket.pee++;
     if (hasPoop(record.diaperType)) bucket.poop++;
+    if (isChange(record.diaperType)) bucket.changes++;
   }
   return { records, buckets };
 }
@@ -276,6 +292,10 @@ function hasPee(type: string) {
 
 function hasPoop(type: string) {
   return type === "便" || type === "尿+便";
+}
+
+function isChange(type: string) {
+  return type === "换尿不湿";
 }
 
 function startOfMonthMonthsAgo(today: string, monthsAgo: number) {

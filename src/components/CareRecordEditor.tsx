@@ -215,12 +215,12 @@ export function CareRecordEditor({
                       change({ diaperType: event.target.value })
                     }
                   >
-                    {["尿", "便", "尿+便"].map((value) => (
+                    {["换尿不湿", "尿", "便", "尿+便"].map((value) => (
                       <option key={value}>{value}</option>
                     ))}
                   </select>
                 </Field>
-                {draft.diaperType !== "尿" ? (
+                {draft.diaperType?.includes("便") ? (
                   <Field label="便便颜色">
                     <input
                       className={inputClass}
